@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import org.deltacv.myapplication.ui.ProjectDetailScreen
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -36,11 +37,25 @@ class MainActivity : ComponentActivity() {
 
 // Modelo de datos
 data class Persona(
-
     val nombre: String,
     val cargo: String,
     val telefono: String,
     val correo: String
+)
+
+data class Proyecto(
+    val titulo: String,
+    val ods: String,
+    val objetivoPrincipal: String,
+    val antecedentes: String,
+    val justificacion: String,
+    val objetivosEspecificos: String,
+    val alcance: String,
+    val descripcionGeneral: String,
+    val recursosNecesarios: String,
+    val cronograma: String,
+    val resultadosEsperados: String,
+    val responsables: String
 )
 
 // Lista de ejemplo con 5 personas
@@ -50,6 +65,21 @@ val listaPersonas = listOf(
     Persona("Sofía Herrera", "Scouter", "+52 614 345 6789", "sofia.herrera@example.com"),
     Persona("Carlos Mendoza", "Rover", "+52 614 456 7890", "carlos.mendoza@example.com"),
     Persona("Valeria Nuñez", "Scouter", "+52 614 567 8901", "valeria.nunez@example.com")
+)
+
+val proyectoEjemplo = Proyecto(
+    titulo = "Limpieza del Río Chuvíscar",
+    ods = "13. Acción por el clima",
+    objetivoPrincipal = "Reducir la contaminación por plásticos en el lecho del río.",
+    antecedentes = "Aumento de residuos sólidos observado en las últimas lluvias.",
+    justificacion = "La contaminación afecta la fauna local y la imagen urbana.",
+    objetivosEspecificos = "- Recolectar 500kg de basura\n- Concientizar a 200 vecinos",
+    alcance = "Tramo entre la calle 10 y la calle 20.",
+    descripcionGeneral = "Jornadas de limpieza los fines de semana con voluntarios.",
+    recursosNecesarios = "Bolsas, guantes, rastrillos, camión de basura.",
+    cronograma = "Septiembre - Noviembre 2026",
+    resultadosEsperados = "Río libre de basura visible y mayor compromiso vecinal.",
+    responsables = "Sebastian (Coordinador) - contacto@ejemplo.com"
 )
 
 @Composable
@@ -89,15 +119,26 @@ fun MainScreen() {
             }
         }
     ) { innerPadding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(backgroundColor)
-                .padding(innerPadding)
-                .padding(horizontal = 12.dp, vertical = 8.dp)
-        ) {
-            items(listaPersonas) { persona ->
-                ProfileCard(persona, titleColor)
+        Box(modifier = Modifier.padding(innerPadding)) {
+            when (selectedItem) {
+                0 -> {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(backgroundColor)
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                    ) {
+                        items(listaPersonas) { persona ->
+                            ProfileCard(persona, titleColor)
+                        }
+                    }
+                }
+                1 -> {
+                    ProjectDetailScreen(
+                        proyecto = proyectoEjemplo,
+                        onBackClick = { selectedItem = 0 }
+                    )
+                }
             }
         }
     }
