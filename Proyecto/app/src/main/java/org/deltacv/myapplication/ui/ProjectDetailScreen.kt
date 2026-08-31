@@ -35,7 +35,7 @@ fun ProjectDetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Detalles de proyecto - Sebastian", fontSize = 18.sp) },
+                title = { Text("Detalles de proyecto", fontSize = 18.sp) },
                 navigationIcon = {
                     IconButton(onClick = onBackClick) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Regresar")
