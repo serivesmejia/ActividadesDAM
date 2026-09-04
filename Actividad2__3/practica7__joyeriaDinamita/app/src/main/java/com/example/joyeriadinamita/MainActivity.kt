@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -17,6 +18,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -95,10 +98,12 @@ fun ProductCard(product: Product, onClick: () -> Unit) {
             modifier = Modifier.padding(12.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Box(
+            Image(
+                painter = painterResource(id = product.image),
+                contentDescription = product.title,
                 modifier = Modifier
-                    .size(100.dp)
-                    .background(Color.LightGray)
+                    .size(100.dp),
+                contentScale = ContentScale.Crop
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(text = product.title, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
@@ -127,14 +132,16 @@ fun DetailsScreen(product: Product) {
             horizontalAlignment = Alignment.Start
         ) {
             item {
-                Box(
+                Image(
+                    painter = painterResource(id = product.image),
+                    contentDescription = product.title,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(200.dp)
-                        .background(Color.LightGray)
+                        .height(200.dp),
+                    contentScale = ContentScale.Crop
                 )
                 Spacer(modifier = Modifier.height(16.dp))
-                Text(text = "Subtítulo de Detalles", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                Text(text = product.title, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 Text(text = product.description, fontSize = 14.sp)
                 Spacer(modifier = Modifier.height(24.dp))
 
