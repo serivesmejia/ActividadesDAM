@@ -149,14 +149,14 @@ fun DetailsScreen(product: Product) {
                 OutlinedTextField(
                     value = inputTitle,
                     onValueChange = { inputTitle = it },
-                    label = { Text("Título") },
+                    label = { Text("Nombre") },
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 OutlinedTextField(
                     value = inputContent,
                     onValueChange = { inputContent = it },
-                    label = { Text("Contenido") },
+                    label = { Text("Comentario") },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(120.dp) // Double height roughly
