@@ -167,7 +167,7 @@ fun DetailsScreen(product: Product) {
 
                 Button(
                     onClick = {
-                        if (inputTitle.isNotBlank() || inputContent.isNotBlank()) {
+                        if (inputTitle.isNotBlank() && inputContent.isNotBlank()) {
                             val newComment = Comment(inputTitle, inputContent)
                             comments.add(0, newComment)
                             product.comments.add(0, newComment)
