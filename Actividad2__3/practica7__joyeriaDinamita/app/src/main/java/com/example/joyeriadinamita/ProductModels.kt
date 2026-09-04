@@ -5,7 +5,8 @@ data class Product(
     val title: String,
     val price: String,
     val description: String,
-    val image: Int
+    val image: Int,
+    val comments: MutableList<Comment> = mutableListOf()
 )
 
 data class Comment(

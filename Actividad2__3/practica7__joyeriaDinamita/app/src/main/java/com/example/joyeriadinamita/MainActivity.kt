@@ -117,7 +117,9 @@ fun ProductCard(product: Product, onClick: () -> Unit) {
 fun DetailsScreen(product: Product) {
     var inputTitle by remember { mutableStateOf("") }
     var inputContent by remember { mutableStateOf("") }
-    val comments = remember { mutableStateListOf<Comment>() }
+    val comments = remember(product.id) {
+        mutableStateListOf<Comment>().apply { addAll(product.comments) }
+    }
 
     Scaffold(
         topBar = {
@@ -166,7 +168,9 @@ fun DetailsScreen(product: Product) {
                 Button(
                     onClick = {
                         if (inputTitle.isNotBlank() || inputContent.isNotBlank()) {
-                            comments.add(0, Comment(inputTitle, inputContent))
+                            val newComment = Comment(inputTitle, inputContent)
+                            comments.add(0, newComment)
+                            product.comments.add(0, newComment)
                             inputTitle = ""
                             inputContent = ""
                         }
