@@ -19,16 +19,12 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import org.deltacv.actividad2.ui.theme.Actividad2Theme
-
-data class Comment(
-    val author: String,
-    val content: String
-)
 
 @Composable
 fun Modifier.verticalScrollbar(
@@ -56,13 +52,16 @@ fun Modifier.verticalScrollbar(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NewsDetailScreen(article: NewsArticle, onBack: () -> Unit) {
+    val context = LocalContext.current
+    val dbHelper = remember { CommentDatabaseHelper(context) }
+
     var name by remember { mutableStateOf("") }
     var commentContent by remember { mutableStateOf("") }
-    val comments = remember {
-        mutableStateListOf(
-            Comment("Carlos López", "¡Excelente noticia! Muy informativa."),
-            Comment("María García", "Gracias por compartir esta actualización.")
-        )
+    val comments = remember { mutableStateListOf<Comment>() }
+
+    LaunchedEffect(article.id) {
+        comments.clear()
+        comments.addAll(dbHelper.getCommentsForArticle(article.id))
     }
 
     Scaffold(
@@ -203,7 +202,12 @@ fun NewsDetailScreen(article: NewsArticle, onBack: () -> Unit) {
                     Button(
                         onClick = {
                             if (name.isNotBlank() && commentContent.isNotBlank()) {
-                                comments.add(Comment(author = name.trim(), content = commentContent.trim()))
+                                val newComment = dbHelper.addComment(
+                                    articleId = article.id,
+                                    author = name.trim(),
+                                    content = commentContent.trim()
+                                )
+                                comments.add(newComment)
                                 name = ""
                                 commentContent = ""
                             }
