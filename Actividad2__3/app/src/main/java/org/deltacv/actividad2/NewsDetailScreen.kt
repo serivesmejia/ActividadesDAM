@@ -81,6 +81,8 @@ fun NewsDetailScreen(article: NewsArticle, onBack: () -> Unit) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .consumeWindowInsets(innerPadding)
+                .imePadding()
                 .verticalScrollbar(scrollState)
                 .verticalScroll(scrollState)
                 .padding(16.dp)
@@ -159,7 +161,6 @@ fun NewsDetailScreen(article: NewsArticle, onBack: () -> Unit) {
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Formulario para agregar comentario
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
@@ -167,6 +168,7 @@ fun NewsDetailScreen(article: NewsArticle, onBack: () -> Unit) {
                 ),
                 shape = RoundedCornerShape(16.dp)
             ) {
+                // Formulario para agregar comentario
                 Column(
                     modifier = Modifier.padding(16.dp)
                 ) {
