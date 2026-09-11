@@ -9,6 +9,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -58,6 +60,7 @@ fun NewsDetailScreen(article: NewsArticle, onBack: () -> Unit) {
     var name by remember { mutableStateOf("") }
     var commentContent by remember { mutableStateOf("") }
     val comments = remember { mutableStateListOf<Comment>() }
+    var editingComment by remember { mutableStateOf<Comment?>(null) }
 
     LaunchedEffect(article.id) {
         comments.clear()
@@ -141,13 +144,57 @@ fun NewsDetailScreen(article: NewsArticle, onBack: () -> Unit) {
                         ),
                         shape = RoundedCornerShape(12.dp)
                     ) {
+
                         Column(modifier = Modifier.padding(12.dp)) {
-                            Text(
-                                text = comment.author,
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
-                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = comment.author,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Row {
+                                    IconButton(
+                                        onClick = {
+                                            editingComment = comment
+                                            name = comment.author
+                                            commentContent = comment.content
+                                        },
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Edit,
+                                            contentDescription = "Edit",
+                                            tint = MaterialTheme.colorScheme.secondary,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                    IconButton(
+                                        onClick = {
+                                            commentDao.delete(comment)
+                                            comments.remove(comment)
+                                            if (editingComment?.id == comment.id) {
+                                                editingComment = null
+                                                name = ""
+                                                commentContent = ""
+                                            }
+                                        },
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Delete,
+                                            contentDescription = "Delete",
+                                            tint = MaterialTheme.colorScheme.error,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                }
+                            }
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
                                 text = comment.content,
@@ -172,12 +219,27 @@ fun NewsDetailScreen(article: NewsArticle, onBack: () -> Unit) {
                 Column(
                     modifier = Modifier.padding(16.dp)
                 ) {
-                    Text(
-                        text = "Escribe un comentario",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (editingComment != null) "Editar comentario" else "Escribe un comentario",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        if (editingComment != null) {
+                            TextButton(onClick = {
+                                editingComment = null
+                                name = ""
+                                commentContent = ""
+                            }) {
+                                Text("Cancelar")
+                            }
+                        }
+                    }
                     Spacer(modifier = Modifier.height(12.dp))
 
                     OutlinedTextField(
@@ -185,6 +247,7 @@ fun NewsDetailScreen(article: NewsArticle, onBack: () -> Unit) {
                         onValueChange = { name = it },
                         label = { Text("Nombre") },
                         singleLine = true,
+                        enabled = editingComment == null,
                         modifier = Modifier.fillMaxWidth()
                     )
 
@@ -204,14 +267,28 @@ fun NewsDetailScreen(article: NewsArticle, onBack: () -> Unit) {
                     Button(
                         onClick = {
                             if (name.isNotBlank() && commentContent.isNotBlank()) {
-                                val commentToInsert = Comment(
-                                    articleId = article.id,
-                                    author = name.trim(),
-                                    content = commentContent.trim()
-                                )
-                                val newId = commentDao.insert(commentToInsert)
-                                val newComment = commentToInsert.copy(id = newId)
-                                comments.add(newComment)
+                                val currentEditing = editingComment
+                                if (currentEditing != null) {
+                                    val updatedComment = currentEditing.copy(
+                                        author = name.trim(),
+                                        content = commentContent.trim()
+                                    )
+                                    commentDao.update(updatedComment)
+                                    val index = comments.indexOfFirst { it.id == updatedComment.id }
+                                    if (index != -1) {
+                                        comments[index] = updatedComment
+                                    }
+                                    editingComment = null
+                                } else {
+                                    val commentToInsert = Comment(
+                                        articleId = article.id,
+                                        author = name.trim(),
+                                        content = commentContent.trim()
+                                    )
+                                    val newId = commentDao.insert(commentToInsert)
+                                    val newComment = commentToInsert.copy(id = newId)
+                                    comments.add(newComment)
+                                }
                                 name = ""
                                 commentContent = ""
                             }
@@ -220,12 +297,12 @@ fun NewsDetailScreen(article: NewsArticle, onBack: () -> Unit) {
                         modifier = Modifier.align(Alignment.End)
                     ) {
                         Icon(
-                            imageVector = Icons.AutoMirrored.Filled.Send,
+                            imageVector = if (editingComment != null) Icons.Default.Edit else Icons.AutoMirrored.Filled.Send,
                             contentDescription = null,
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Publicar")
+                        Text(if (editingComment != null) "Actualizar" else "Publicar")
                     }
                 }
             }

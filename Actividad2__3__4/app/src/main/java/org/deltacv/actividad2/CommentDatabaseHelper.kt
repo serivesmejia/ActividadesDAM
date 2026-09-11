@@ -18,6 +18,12 @@ interface CommentDao {
 
     @Insert
     fun insert(comment: Comment): Long
+
+    @Update
+    fun update(comment: Comment)
+
+    @Delete
+    fun delete(comment: Comment)
 }
 
 @Database(entities = [Comment::class], version = 1, exportSchema = false)
