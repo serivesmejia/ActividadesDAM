@@ -53,7 +53,7 @@ fun Modifier.verticalScrollbar(
 @Composable
 fun NewsDetailScreen(article: NewsArticle, onBack: () -> Unit) {
     val context = LocalContext.current
-    val dbHelper = remember { CommentDatabaseHelper(context) }
+    val commentDao = remember { AppDatabase.getDatabase(context).commentDao() }
 
     var name by remember { mutableStateOf("") }
     var commentContent by remember { mutableStateOf("") }
@@ -61,7 +61,7 @@ fun NewsDetailScreen(article: NewsArticle, onBack: () -> Unit) {
 
     LaunchedEffect(article.id) {
         comments.clear()
-        comments.addAll(dbHelper.getCommentsForArticle(article.id))
+        comments.addAll(commentDao.getCommentsForArticle(article.id))
     }
 
     Scaffold(
@@ -204,11 +204,13 @@ fun NewsDetailScreen(article: NewsArticle, onBack: () -> Unit) {
                     Button(
                         onClick = {
                             if (name.isNotBlank() && commentContent.isNotBlank()) {
-                                val newComment = dbHelper.addComment(
+                                val commentToInsert = Comment(
                                     articleId = article.id,
                                     author = name.trim(),
                                     content = commentContent.trim()
                                 )
+                                val newId = commentDao.insert(commentToInsert)
+                                val newComment = commentToInsert.copy(id = newId)
                                 comments.add(newComment)
                                 name = ""
                                 commentContent = ""
