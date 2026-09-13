@@ -2,16 +2,49 @@ package org.deltacv.actividad2
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.AutoStories
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextOverflow
@@ -26,227 +59,224 @@ fun NewsScreen(
     onToggleDarkMode: () -> Unit,
     onArticleClick: (NewsArticle) -> Unit
 ) {
+    val context = LocalContext.current
+    val commentDao = remember { AppDatabase.getDatabase(context).commentDao() }
+    var selectedTab by remember { mutableIntStateOf(0) }
 
     Scaffold(
-
         modifier = Modifier.fillMaxSize(),
-
-        // Barra superior
         topBar = {
-
             TopAppBar(
-
                 title = {
-                    Text(
-                        text = "Noticias Dinamita"
-                    )
+                    Text(text = if (selectedTab == 0) "Noticias Dinamita" else "Favoritos")
                 },
-
                 actions = {
+                    IconButton(onClick = onToggleDarkMode) {
+                        Text(text = if (isDarkMode) "☀️" else "🌙")
+                    }
+                }
+            )
+        },
+        bottomBar = {
+            NavigationBar {
+                NavigationBarItem(
+                    selected = selectedTab == 0,
+                    onClick = { selectedTab = 0 },
+                    icon = { Icon(Icons.Default.Home, contentDescription = "Inicio") },
+                    label = { Text("Inicio") }
+                )
+                NavigationBarItem(
+                    selected = selectedTab == 1,
+                    onClick = { selectedTab = 1 },
+                    icon = {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.AutoStories, contentDescription = null)
+                            Icon(
+                                Icons.Default.Favorite,
+                                contentDescription = null,
+                                modifier = Modifier.size(10.dp),
+                                tint = Color.Red
+                            )
+                        }
+                    },
+                    label = { Text("Favoritos") }
+                )
+            }
+        }
+    ) { innerPadding ->
+        if (selectedTab == 0) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
+                contentPadding = PaddingValues(bottom = 16.dp)
+            ) {
+                item {
+                    HeroHeader()
+                }
+                items(articles) { article ->
+                    val isLiked = remember(article.id) { 
+                        mutableStateOf(commentDao.isArticleLiked(article.id) ?: false)
+                    }
+                    
+                    NewsCard(
+                        article = article,
+                        isLiked = isLiked.value,
+                        onLikeToggle = {
+                            val nextState = !isLiked.value
+                            isLiked.value = nextState
+                            commentDao.insertOrUpdateLike(NewsLike(article.id, nextState))
+                        },
+                        onClick = {
+                            onArticleClick(article)
+                        }
+                    )
+                }
+            }
+        } else {
+            // Pantalla de Favoritos
+            var updateTrigger by remember { mutableIntStateOf(0) }
+            val likedArticles = remember(selectedTab, updateTrigger) {
+                articles.filter { article ->
+                    commentDao.isArticleLiked(article.id) == true
+                }
+            }
 
-                    // Botón para cambiar el modo
-                    IconButton(
-                        onClick = onToggleDarkMode
-                    ) {
-
-                        Text(
-                            text = if (isDarkMode) {
-                                "☀️"
-                            } else {
-                                "🌙"
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
+                contentPadding = PaddingValues(bottom = 16.dp)
+            ) {
+                if (likedArticles.isEmpty()) {
+                    item {
+                        Box(
+                            modifier = Modifier.fillParentMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Aún no tienes noticias favoritas",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                } else {
+                    items(likedArticles) { article ->
+                        NewsCard(
+                            article = article,
+                            isLiked = true,
+                            onLikeToggle = {
+                                commentDao.insertOrUpdateLike(NewsLike(article.id, false))
+                                updateTrigger++
+                            },
+                            onClick = {
+                                onArticleClick(article)
                             }
                         )
                     }
                 }
-            )
-        }
-
-    ) { innerPadding ->
-
-        LazyColumn(
-
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding),
-
-            contentPadding = PaddingValues(
-                bottom = 16.dp
-            )
-        ) {
-
-            // Encabezado
-            item {
-                HeroHeader()
-            }
-
-            // Lista de noticias
-            items(articles) { article ->
-
-                NewsCard(
-                    article = article,
-
-                    onClick = {
-                        onArticleClick(article)
-                    }
-                )
             }
         }
     }
 }
 
-
 @Composable
 fun HeroHeader() {
-
     Box(
-
         modifier = Modifier
             .fillMaxWidth()
             .height(200.dp)
-            .background(
-                MaterialTheme.colorScheme.primaryContainer
-            ),
-
+            .background(MaterialTheme.colorScheme.primaryContainer),
         contentAlignment = Alignment.BottomStart
     ) {
-
-        // Espacio decorativo
         Box(
-
             modifier = Modifier
                 .fillMaxHeight(0.2f)
-                .background(
-                    MaterialTheme.colorScheme.primary.copy(
-                        alpha = 0.2f
-                    )
-                )
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.2f))
         )
-
         Text(
-
             text = "Noticias Dinamita",
-
             style = MaterialTheme.typography.displaySmall,
-
             fontStyle = FontStyle.Italic,
-
             modifier = Modifier.padding(24.dp),
-
             color = MaterialTheme.colorScheme.onPrimaryContainer
         )
     }
 }
 
-
 @Composable
 fun NewsCard(
     article: NewsArticle,
+    isLiked: Boolean,
+    onLikeToggle: () -> Unit,
     onClick: () -> Unit
 ) {
-
     Card(
-
         onClick = onClick,
-
         modifier = Modifier
             .fillMaxWidth()
-            .padding(
-                horizontal = 16.dp,
-                vertical = 8.dp
-            ),
-
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = 2.dp
-        ),
-
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         shape = RoundedCornerShape(12.dp)
     ) {
-
         Row(
-
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(12.dp),
-
             verticalAlignment = Alignment.CenterVertically
         ) {
-
-            // Imagen de la noticia
             Image(
-
-                painter = painterResource(
-                    id = article.imageRes
-                ),
-
+                painter = painterResource(id = article.imageRes),
                 contentDescription = null,
-
                 modifier = Modifier
                     .size(100.dp)
-                    .clip(
-                        RoundedCornerShape(8.dp)
-                    ),
-
+                    .clip(RoundedCornerShape(8.dp)),
                 contentScale = ContentScale.Crop
             )
 
-            Column(
-
+            Box(
                 modifier = Modifier
                     .weight(1f)
                     .padding(start = 12.dp)
             ) {
+                Column {
+                    Text(
+                        text = article.title,
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = article.body,
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
 
-                // Título
-                Text(
-
-                    text = article.title,
-
-                    style = MaterialTheme.typography.titleMedium,
-
-                    maxLines = 2,
-
-                    overflow = TextOverflow.Ellipsis,
-
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-
-                Spacer(
-                    modifier = Modifier.height(4.dp)
-                )
-
-                // Descripción
-                Text(
-
-                    text = article.body,
-
-                    style = MaterialTheme.typography.bodySmall,
-
-                    maxLines = 3,
-
-                    overflow = TextOverflow.Ellipsis,
-
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+            IconButton(onClick = onLikeToggle) {
+                Icon(
+                    imageVector = if (isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                    contentDescription = "Like",
+                    tint = if (isLiked) Color.Red else LocalContentColor.current
                 )
             }
         }
     }
 }
 
-
-@Preview(
-    showBackground = true
-)
+@Preview(showBackground = true)
 @Composable
 fun NewsScreenPreview() {
-
     Actividad2Theme {
-
         NewsScreen(
-
             isDarkMode = false,
-
             onToggleDarkMode = {},
-
             onArticleClick = {}
         )
     }

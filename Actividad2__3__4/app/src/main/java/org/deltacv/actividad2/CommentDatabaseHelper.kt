@@ -11,6 +11,12 @@ data class Comment(
     val content: String,
 )
 
+@Entity(tableName = "news_likes")
+data class NewsLike(
+    @PrimaryKey val articleId: Int,
+    val liked: Boolean
+)
+
 @Dao
 interface CommentDao {
     @Query("SELECT * FROM comments WHERE article_id = :articleId ORDER BY id ASC")
@@ -24,9 +30,15 @@ interface CommentDao {
 
     @Delete
     fun delete(comment: Comment)
+
+    @Query("SELECT liked FROM news_likes WHERE articleId = :articleId")
+    fun isArticleLiked(articleId: Int): Boolean?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun insertOrUpdateLike(newsLike: NewsLike)
 }
 
-@Database(entities = [Comment::class], version = 1, exportSchema = false)
+@Database(entities = [Comment::class, NewsLike::class], version = 2, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun commentDao(): CommentDao
 
@@ -41,6 +53,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "news_comments_room.db"
                 )
+                .fallbackToDestructiveMigration()
                 .addCallback(DatabaseCallback())
                 .allowMainThreadQueries()
                 .build()

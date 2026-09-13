@@ -11,6 +11,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -61,10 +63,12 @@ fun NewsDetailScreen(article: NewsArticle, onBack: () -> Unit) {
     var commentContent by remember { mutableStateOf("") }
     val comments = remember { mutableStateListOf<Comment>() }
     var editingComment by remember { mutableStateOf<Comment?>(null) }
+    var isLiked by remember { mutableStateOf(false) }
 
     LaunchedEffect(article.id) {
         comments.clear()
         comments.addAll(commentDao.getCommentsForArticle(article.id))
+        isLiked = commentDao.isArticleLiked(article.id) ?: false
     }
 
     Scaffold(
@@ -74,6 +78,19 @@ fun NewsDetailScreen(article: NewsArticle, onBack: () -> Unit) {
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = {
+                        val nextState = !isLiked
+                        isLiked = nextState
+                        commentDao.insertOrUpdateLike(NewsLike(article.id, nextState))
+                    }) {
+                        Icon(
+                            imageVector = if (isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                            contentDescription = "Like",
+                            tint = if (isLiked) Color.Red else LocalContentColor.current
+                        )
                     }
                 }
             )
