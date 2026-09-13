@@ -25,6 +25,9 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.rememberSwipeToDismissBoxState
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -162,18 +165,61 @@ fun NewsScreen(
                         }
                     }
                 } else {
-                    items(likedArticles) { article ->
-                        NewsCard(
-                            article = article,
-                            isLiked = true,
-                            onLikeToggle = {
-                                commentDao.insertOrUpdateLike(NewsLike(article.id, false))
-                                updateTrigger++
-                            },
-                            onClick = {
-                                onArticleClick(article)
+                    items(likedArticles, key = { it.id }) { article ->
+                        val dismissState = rememberSwipeToDismissBoxState(
+                            confirmValueChange = { value ->
+                                if (value == SwipeToDismissBoxValue.StartToEnd || value == SwipeToDismissBoxValue.EndToStart) {
+                                    commentDao.insertOrUpdateLike(NewsLike(article.id, false))
+                                    updateTrigger++
+                                    true
+                                } else {
+                                    false
+                                }
                             }
                         )
+
+                        SwipeToDismissBox(
+                            state = dismissState,
+                            backgroundContent = {
+                                val color = when (dismissState.dismissDirection) {
+                                    SwipeToDismissBoxValue.StartToEnd -> Color.Red.copy(alpha = 0.2f)
+                                    SwipeToDismissBoxValue.EndToStart -> Color.Red.copy(alpha = 0.2f)
+                                    else -> Color.Transparent
+                                }
+                                val alignment = when (dismissState.dismissDirection) {
+                                    SwipeToDismissBoxValue.StartToEnd -> Alignment.CenterStart
+                                    SwipeToDismissBoxValue.EndToStart -> Alignment.CenterEnd
+                                    else -> Alignment.Center
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                                        .background(color, shape = RoundedCornerShape(12.dp))
+                                        .padding(horizontal = 20.dp),
+                                    contentAlignment = alignment
+                                ) {
+                                    if (dismissState.dismissDirection != SwipeToDismissBoxValue.Settled) {
+                                        Text(
+                                            text = "💔",
+                                            style = MaterialTheme.typography.headlineMedium
+                                        )
+                                    }
+                                }
+                            }
+                        ) {
+                            NewsCard(
+                                article = article,
+                                isLiked = true,
+                                onLikeToggle = {
+                                    commentDao.insertOrUpdateLike(NewsLike(article.id, false))
+                                    updateTrigger++
+                                },
+                                onClick = {
+                                    onArticleClick(article)
+                                }
+                            )
+                        }
                     }
                 }
             }
