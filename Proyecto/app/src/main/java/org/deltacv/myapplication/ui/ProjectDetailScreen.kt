@@ -9,8 +9,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.People
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -20,17 +23,27 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import org.deltacv.myapplication.Proyecto
-import org.deltacv.myapplication.TareaCronograma
+import org.deltacv.myapplication.data.ProyectoData
+import org.deltacv.myapplication.data.TareaCronogramaData
+import org.deltacv.myapplication.data.User
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProjectDetailScreen(
-    proyecto: Proyecto,
-    onBackClick: () -> Unit
+    proyecto: ProyectoData,
+    currentUser: User,
+    onBackClick: () -> Unit,
+    onToggleVolunteer: () -> Unit,
+    onEditProject: (ProyectoData) -> Unit,
+    onDeleteProject: (String) -> Unit
 ) {
-    val backgroundColor = Color(0xFFFDF6F0) // Beige más suave
-    val titleColor = Color(0xFFBD0000)
+    val isOwner = proyecto.creadorId == currentUser.id
+    val isVolunteer = proyecto.participantesIds.contains(currentUser.id)
+
+    var showEditDialog by remember { mutableStateOf(false) }
+    var showDeleteConfirmDialog by remember { mutableStateOf(false) }
+
+    val primaryColor = MaterialTheme.colorScheme.primary
 
     Scaffold(
         topBar = {
@@ -41,8 +54,18 @@ fun ProjectDetailScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Regresar")
                     }
                 },
+                actions = {
+                    if (isOwner) {
+                        IconButton(onClick = { showEditDialog = true }) {
+                            Icon(Icons.Filled.Edit, contentDescription = "Editar proyecto", tint = Color.White)
+                        }
+                        IconButton(onClick = { showDeleteConfirmDialog = true }) {
+                            Icon(Icons.Filled.Delete, contentDescription = "Borrar proyecto", tint = Color.White)
+                        }
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color(0xFFBD0000),
+                    containerColor = primaryColor,
                     titleContentColor = Color.White,
                     navigationIconContentColor = Color.White
                 )
@@ -52,23 +75,64 @@ fun ProjectDetailScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(backgroundColor)
                 .padding(innerPadding)
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp)
         ) {
-            Text(
-                text = proyecto.titulo,
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-                color = titleColor,
-                modifier = Modifier.padding(bottom = 16.dp)
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = proyecto.titulo,
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = primaryColor,
+                    modifier = Modifier.weight(1f)
+                )
+
+                if (isOwner) {
+                    Row {
+                        IconButton(onClick = { showEditDialog = true }) {
+                            Icon(Icons.Filled.Edit, contentDescription = "Editar", tint = primaryColor)
+                        }
+                        IconButton(onClick = { showDeleteConfirmDialog = true }) {
+                            Icon(Icons.Filled.Delete, contentDescription = "Borrar", tint = MaterialTheme.colorScheme.error)
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Participantes / Voluntarios
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Filled.People, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Participantes registrados: ${proyecto.participantesIds.size}",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
 
             // Sección 1: ODS y Objetivos
             CollapsibleSection(
                 title = "ODS y Objetivos",
-                backgroundColor = Color(0xFFD1E8E2) // Verde/Azul suave
+                backgroundColor = Color(0xFFD1E8E2)
             ) {
                 ProjectField("ODS que está trabajando", proyecto.ods)
                 ProjectField("Objetivo principal", proyecto.objetivoPrincipal)
@@ -80,7 +144,7 @@ fun ProjectDetailScreen(
             // Sección 2: Contexto
             CollapsibleSection(
                 title = "Contexto",
-                backgroundColor = Color(0xFFFFF2CC) // Amarillo suave
+                backgroundColor = Color(0xFFFFF2CC)
             ) {
                 ProjectField("Antecedentes", proyecto.antecedentes)
                 ProjectField("Justificación", proyecto.justificacion)
@@ -91,12 +155,12 @@ fun ProjectDetailScreen(
             // Sección 3: Planificación
             CollapsibleSection(
                 title = "Planificación",
-                backgroundColor = Color(0xFFE1D5E7) // Morado suave
+                backgroundColor = Color(0xFFE1D5E7)
             ) {
                 ProjectField("Alcance", proyecto.alcance)
                 ProjectField("Descripción general", proyecto.descripcionGeneral)
                 ProjectField("Recursos necesarios", proyecto.recursosNecesarios)
-                
+
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     text = "Cronograma",
@@ -113,38 +177,152 @@ fun ProjectDetailScreen(
             // Sección 4: Resultados y Contacto
             CollapsibleSection(
                 title = "Resultados y Contacto",
-                backgroundColor = Color(0xFFD5E8D4) // Verde suave
+                backgroundColor = Color(0xFFD5E8D4)
             ) {
                 ProjectField("Resultados esperados", proyecto.resultadosEsperados)
                 ProjectField("Responsables y formas de contacto", proyecto.responsables)
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Botón de Voluntariado (para terceros)
+            if (!isOwner) {
+                Button(
+                    onClick = onToggleVolunteer,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isVolunteer) MaterialTheme.colorScheme.error else primaryColor
+                    )
+                ) {
+                    Text(
+                        text = if (isVolunteer) "Salir del voluntariado" else "Unirse como voluntario",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+            }
 
             Button(
                 onClick = onBackClick,
                 modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFBD0000))
+                colors = ButtonDefaults.buttonColors(containerColor = Color.Gray)
             ) {
                 Text("Regresar a la lista de proyectos", color = Color.White)
             }
         }
     }
+
+    // DIÁLOGO PARA EDITAR PROYECTO
+    if (showEditDialog) {
+        var editedTitulo by remember { mutableStateOf(proyecto.titulo) }
+        var editedOds by remember { mutableStateOf(proyecto.ods) }
+        var editedObjetivoPrincipal by remember { mutableStateOf(proyecto.objetivoPrincipal) }
+        var editedAntecedentes by remember { mutableStateOf(proyecto.antecedentes) }
+        var editedJustificacion by remember { mutableStateOf(proyecto.justificacion) }
+        var editedObjetivosEspecificos by remember { mutableStateOf(proyecto.objetivosEspecificos) }
+        var editedAlcance by remember { mutableStateOf(proyecto.alcance) }
+        var editedDescripcionGeneral by remember { mutableStateOf(proyecto.descripcionGeneral) }
+        var editedRecursosNecesarios by remember { mutableStateOf(proyecto.recursosNecesarios) }
+        var editedResultadosEsperados by remember { mutableStateOf(proyecto.resultadosEsperados) }
+        var editedResponsables by remember { mutableStateOf(proyecto.responsables) }
+
+        AlertDialog(
+            onDismissRequest = { showEditDialog = false },
+            title = { Text("Editar Proyecto") },
+            text = {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    OutlinedTextField(value = editedTitulo, onValueChange = { editedTitulo = it }, label = { Text("Título") }, modifier = Modifier.fillMaxWidth())
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(value = editedOds, onValueChange = { editedOds = it }, label = { Text("ODS") }, modifier = Modifier.fillMaxWidth())
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(value = editedObjetivoPrincipal, onValueChange = { editedObjetivoPrincipal = it }, label = { Text("Objetivo Principal") }, modifier = Modifier.fillMaxWidth())
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(value = editedAntecedentes, onValueChange = { editedAntecedentes = it }, label = { Text("Antecedentes") }, modifier = Modifier.fillMaxWidth())
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(value = editedJustificacion, onValueChange = { editedJustificacion = it }, label = { Text("Justificación") }, modifier = Modifier.fillMaxWidth())
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(value = editedObjetivosEspecificos, onValueChange = { editedObjetivosEspecificos = it }, label = { Text("Objetivos Específicos") }, modifier = Modifier.fillMaxWidth())
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(value = editedAlcance, onValueChange = { editedAlcance = it }, label = { Text("Alcance") }, modifier = Modifier.fillMaxWidth())
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(value = editedDescripcionGeneral, onValueChange = { editedDescripcionGeneral = it }, label = { Text("Descripción General") }, modifier = Modifier.fillMaxWidth())
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(value = editedRecursosNecesarios, onValueChange = { editedRecursosNecesarios = it }, label = { Text("Recursos Necesarios") }, modifier = Modifier.fillMaxWidth())
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(value = editedResultadosEsperados, onValueChange = { editedResultadosEsperados = it }, label = { Text("Resultados Esperados") }, modifier = Modifier.fillMaxWidth())
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(value = editedResponsables, onValueChange = { editedResponsables = it }, label = { Text("Responsables") }, modifier = Modifier.fillMaxWidth())
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val updatedProj = proyecto.copy(
+                            titulo = editedTitulo,
+                            ods = editedOds,
+                            objetivoPrincipal = editedObjetivoPrincipal,
+                            antecedentes = editedAntecedentes,
+                            justificacion = editedJustificacion,
+                            objetivosEspecificos = editedObjetivosEspecificos,
+                            alcance = editedAlcance,
+                            descripcionGeneral = editedDescripcionGeneral,
+                            recursosNecesarios = editedRecursosNecesarios,
+                            resultadosEsperados = editedResultadosEsperados,
+                            responsables = editedResponsables
+                        )
+                        onEditProject(updatedProj)
+                        showEditDialog = false
+                    }
+                ) {
+                    Text("Guardar cambios")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEditDialog = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+
+    // DIÁLOGO DE VERIFICACIÓN PARA BORRAR PROYECTO
+    if (showDeleteConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirmDialog = false },
+            title = { Text("Confirmar eliminación") },
+            text = { Text("¿Estás seguro de que deseas eliminar este proyecto? Esta acción no se puede deshacer.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDeleteConfirmDialog = false
+                        onDeleteProject(proyecto.id)
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Eliminar", color = Color.White)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirmDialog = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
 }
 
 @Composable
-fun ScheduleChart(tareas: List<TareaCronograma>) {
-    // Determinamos los labels basándonos en si hay tareas en meses posteriores
+fun ScheduleChart(tareas: List<TareaCronogramaData>) {
     val maxMes = tareas.maxOfOrNull { it.mesInicio + it.duracion } ?: 3
     val meses = if (maxMes <= 2) listOf("Jul", "Ago") else listOf("Sep", "Oct", "Nov")
     val numColumnas = meses.size
-    
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 8.dp)
     ) {
-        // Cabecera de meses
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -163,7 +341,6 @@ fun ScheduleChart(tareas: List<TareaCronograma>) {
 
         Spacer(modifier = Modifier.height(4.dp))
 
-        // Filas de tareas
         tareas.forEach { tarea ->
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -175,7 +352,7 @@ fun ScheduleChart(tareas: List<TareaCronograma>) {
                     text = tarea.nombre,
                     modifier = Modifier.width(100.dp),
                     fontSize = 12.sp,
-                    color = Color.Black
+                    color = MaterialTheme.colorScheme.onSurface
                 )
 
                 Box(
@@ -189,7 +366,7 @@ fun ScheduleChart(tareas: List<TareaCronograma>) {
                                 modifier = Modifier
                                     .weight(1f)
                                     .fillMaxHeight()
-                                    .background(Color.White.copy(alpha = 0.3f))
+                                    .background(Color.Gray.copy(alpha = 0.2f))
                             )
                         }
                     }
@@ -203,7 +380,7 @@ fun ScheduleChart(tareas: List<TareaCronograma>) {
                                 .weight(tarea.duracion.toFloat())
                                 .fillMaxHeight()
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(Color(0xFFBD0000).copy(alpha = 0.6f))
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.7f))
                         )
                         val restante = numColumnas - (tarea.mesInicio + tarea.duracion)
                         if (restante > 0) {
