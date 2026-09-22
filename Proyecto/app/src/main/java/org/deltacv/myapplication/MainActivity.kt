@@ -8,6 +8,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -35,15 +37,19 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             var mostrarLogin by remember { mutableStateOf(true) }
+            val listaUsuarios = remember { mutableStateListOf(*listaPersonasIniciales.toTypedArray()) }
 
             if (mostrarLogin) {
                 LoginScreen(
+                    listaUsuarios = listaUsuarios,
                     onLoginSuccess = {
                         mostrarLogin = false
                     }
                 )
             } else {
-                MainScreen()
+                MainScreen(
+                    listaPersonas = listaUsuarios
+                )
             }
         }
     }
@@ -55,16 +61,21 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun LoginScreen(
+    listaUsuarios: MutableList<Persona>,
     onLoginSuccess: () -> Unit
 ) {
     var correoUsuario by remember { mutableStateOf("") }
-    var matricula by remember { mutableStateOf("") }
+    var cum by remember { mutableStateOf("") }
     var contrasena by remember { mutableStateOf("") }
     var mostrarRegistro by remember { mutableStateOf(false) }
 
     if (mostrarRegistro) {
         RegistroScreen(
             onBackClick = {
+                mostrarRegistro = false
+            },
+            onRegistroSuccess = { nuevaPersona ->
+                listaUsuarios.add(nuevaPersona)
                 mostrarRegistro = false
             }
         )
@@ -140,23 +151,20 @@ fun LoginScreen(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // MATRÍCULA
+                // CUM
                 OutlinedTextField(
-                    value = matricula,
+                    value = cum,
                     onValueChange = { nuevoTexto ->
 
                         // Permite letras y números
                         if (nuevoTexto.all { it.isLetterOrDigit() }) {
-                            matricula = nuevoTexto
+                            cum = nuevoTexto
                         }
 
                     },
                     modifier = Modifier.fillMaxWidth(),
                     label = {
-                        Text("Matrícula")
-                    },
-                    placeholder = {
-                        Text("Ej. A01234567")
+                        Text("CUM")
                     },
                     singleLine = true,
                     shape = RoundedCornerShape(12.dp)
@@ -187,9 +195,25 @@ fun LoginScreen(
 
                         if (
                             correoUsuario.isNotBlank() &&
-                            matricula.isNotBlank() &&
+                            cum.isNotBlank() &&
                             contrasena.isNotBlank()
                         ) {
+                            val existe = listaUsuarios.any {
+                                it.correo == correoUsuario || it.usuario == correoUsuario || it.cum == cum
+                            }
+                            if (!existe) {
+                                listaUsuarios.add(
+                                    Persona(
+                                        nombre = correoUsuario,
+                                        usuario = correoUsuario,
+                                        correo = if (correoUsuario.contains("@")) correoUsuario else null,
+                                        cum = cum,
+                                        cargo = null,
+                                        telefono = null,
+                                        proyectoAsociado = null
+                                    )
+                                )
+                            }
                             onLoginSuccess()
                         }
 
@@ -246,12 +270,15 @@ fun LoginScreen(
 
 @Composable
 fun RegistroScreen(
-    onBackClick: () -> Unit
+    onBackClick: () -> Unit,
+    onRegistroSuccess: (Persona) -> Unit = {}
 ) {
     var nombre by remember { mutableStateOf("") }
+    var usuario by remember { mutableStateOf("") }
     var correo by remember { mutableStateOf("") }
-    var matricula by remember { mutableStateOf("") }
+    var cum by remember { mutableStateOf("") }
     var contrasena by remember { mutableStateOf("") }
+    var confirmarContrasena by remember { mutableStateOf("") }
 
     val backgroundColor = Color(0xFFE9D4C3)
     val primaryColor = Color(0xFFBD0000)
@@ -279,6 +306,7 @@ fun RegistroScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
                     .padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
@@ -308,6 +336,22 @@ fun RegistroScreen(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
+                // NOMBRE DE USUARIO
+                OutlinedTextField(
+                    value = usuario,
+                    onValueChange = {
+                        usuario = it
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = {
+                        Text("Nombre de usuario")
+                    },
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
                 // CORREO
                 OutlinedTextField(
                     value = correo,
@@ -324,23 +368,20 @@ fun RegistroScreen(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // MATRÍCULA
+                // CUM
                 OutlinedTextField(
-                    value = matricula,
+                    value = cum,
                     onValueChange = { nuevoTexto ->
 
                         // Solo letras y números
                         if (nuevoTexto.all { it.isLetterOrDigit() }) {
-                            matricula = nuevoTexto
+                            cum = nuevoTexto
                         }
 
                     },
                     modifier = Modifier.fillMaxWidth(),
                     label = {
-                        Text("Matrícula")
-                    },
-                    placeholder = {
-                        Text("Ej. A01234567")
+                        Text("CUM")
                     },
                     singleLine = true,
                     shape = RoundedCornerShape(12.dp)
@@ -363,6 +404,23 @@ fun RegistroScreen(
                     shape = RoundedCornerShape(12.dp)
                 )
 
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // CONFIRMACIÓN DE CONTRASEÑA
+                OutlinedTextField(
+                    value = confirmarContrasena,
+                    onValueChange = {
+                        confirmarContrasena = it
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = {
+                        Text("Confirmación de contraseña")
+                    },
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
                 Spacer(modifier = Modifier.height(20.dp))
 
                 // CREAR CUENTA
@@ -371,11 +429,23 @@ fun RegistroScreen(
 
                         if (
                             nombre.isNotBlank() &&
+                            usuario.isNotBlank() &&
                             correo.isNotBlank() &&
-                            matricula.isNotBlank() &&
-                            contrasena.isNotBlank()
+                            cum.isNotBlank() &&
+                            contrasena.isNotBlank() &&
+                            confirmarContrasena.isNotBlank() &&
+                            contrasena == confirmarContrasena
                         ) {
-                            onBackClick()
+                            val nuevaPersona = Persona(
+                                nombre = nombre,
+                                usuario = usuario,
+                                correo = correo,
+                                cum = cum,
+                                cargo = null,
+                                telefono = null,
+                                proyectoAsociado = null
+                            )
+                            onRegistroSuccess(nuevaPersona)
                         }
 
                     },
@@ -395,15 +465,27 @@ fun RegistroScreen(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
-                TextButton(
-                    onClick = onBackClick
+                Row(
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
 
                     Text(
-                        text = "Regresar al inicio de sesión",
-                        color = primaryColor
+                        text = "¿Ya tienes cuenta? ",
+                        color = Color.Gray,
+                        fontSize = 14.sp
+                    )
+
+                    Text(
+                        text = "Inicia sesión",
+                        color = primaryColor,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.clickable {
+                            onBackClick()
+                        }
                     )
                 }
             }
@@ -416,12 +498,16 @@ fun RegistroScreen(
 
 
 data class Persona(
-    val nombre: String,
-    val cargo: String,
-    val telefono: String,
-    val correo: String,
+    val nombre: String? = null,
+    val usuario: String? = null,
+    val cargo: String? = null,
+    val cum: String? = null,
+    val telefono: String? = null,
+    val correo: String? = null,
     val proyectoAsociado: String? = null
 )
+
+fun String?.orSN(): String = if (this.isNullOrBlank()) "S/N" else this
 
 data class TareaCronograma(
     val nombre: String,
@@ -447,43 +533,53 @@ data class Proyecto(
 // LISTA DE PERSONAS
 
 
-val listaPersonas = listOf(
+val listaPersonasIniciales = listOf(
 
     Persona(
-        "Ana Torres",
-        "Scouter",
-        "+52 614 123 4567",
-        "ana.torres@example.com"
+        nombre = "Ana Torres",
+        usuario = "ana.torres",
+        cargo = "Scouter",
+        cum = "CUM001",
+        telefono = "+52 614 123 4567",
+        correo = "ana.torres@example.com"
     ),
 
     Persona(
-        "Luis Ramírez",
-        "Rover",
-        "+52 614 234 5678",
-        "luis.ramirez@example.com",
-        "Reforestación Comunitaria"
+        nombre = "Luis Ramírez",
+        usuario = "luis.ramirez",
+        cargo = "Rover",
+        cum = "CUM002",
+        telefono = "+52 614 234 5678",
+        correo = "luis.ramirez@example.com",
+        proyectoAsociado = "Reforestación Comunitaria"
     ),
 
     Persona(
-        "Sofía Herrera",
-        "Scouter",
-        "+52 614 345 6789",
-        "sofia.herrera@example.com"
+        nombre = "Sofía Herrera",
+        usuario = null,
+        cargo = "Scouter",
+        cum = null,
+        telefono = "+52 614 345 6789",
+        correo = "sofia.herrera@example.com"
     ),
 
     Persona(
-        "Carlos Mendoza",
-        "Rover",
-        "+52 614 456 7890",
-        "carlos.mendoza@example.com"
+        nombre = "Carlos Mendoza",
+        usuario = "carlos.m",
+        cargo = "Rover",
+        cum = null,
+        telefono = "+52 614 456 7890",
+        correo = "carlos.mendoza@example.com"
     ),
 
     Persona(
-        "Valeria Nuñez",
-        "Scouter",
-        "+52 614 567 8901",
-        "valeria.nunez@example.com",
-        "Proyecto impulso para herramientas del futuro"
+        nombre = "Valeria Nuñez",
+        usuario = null,
+        cargo = "Scouter",
+        cum = "CUM005",
+        telefono = "+52 614 567 8901",
+        correo = "valeria.nunez@example.com",
+        proyectoAsociado = "Proyecto impulso para herramientas del futuro"
     )
 )
 
@@ -584,7 +680,9 @@ val listaProyectos = listOf(
 
 
 @Composable
-fun MainScreen() {
+fun MainScreen(
+    listaPersonas: List<Persona> = listaPersonasIniciales
+) {
 
     var selectedTab by remember { mutableStateOf(0) }
 
@@ -693,6 +791,19 @@ fun MainScreen() {
                             )
 
                     ) {
+
+                        item {
+                            Text(
+                                text = "Usuarios registrados",
+                                fontSize = 24.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFBD0000),
+                                modifier = Modifier.padding(
+                                    bottom = 12.dp,
+                                    top = 8.dp
+                                )
+                            )
+                        }
 
                         items(listaPersonas) { persona ->
 
@@ -946,10 +1057,12 @@ fun ProfileCard(
 
             Column {
 
-                Row {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
 
                     Text(
-                        text = persona.nombre,
+                        text = persona.nombre.orSN(),
                         fontSize = 17.sp,
                         fontWeight = FontWeight.Bold,
                         color = nameColor
@@ -960,32 +1073,48 @@ fun ProfileCard(
                     )
 
                     Text(
-                        text = persona.cargo,
+                        text = persona.cargo.orSN(),
                         fontSize = 14.sp,
                         color = Color.Gray
                     )
                 }
 
                 Spacer(
-                    modifier = Modifier.height(6.dp)
+                    modifier = Modifier.height(4.dp)
+                )
+
+                Text(
+                    text = "Usuario: ${persona.usuario.orSN()}",
+                    fontSize = 13.sp,
+                    color = Color.DarkGray
+                )
+
+                Text(
+                    text = "CUM: ${persona.cum.orSN()}",
+                    fontSize = 13.sp,
+                    color = Color.DarkGray
+                )
+
+                Spacer(
+                    modifier = Modifier.height(4.dp)
                 )
 
                 ContactItem(
                     icon = Icons.Filled.Phone,
-                    text = persona.telefono
+                    text = persona.telefono.orSN()
                 )
 
                 ContactItem(
                     icon = Icons.Filled.Email,
-                    text = persona.correo
+                    text = persona.correo.orSN()
                 )
 
-                persona.proyectoAsociado?.let { proyecto ->
+                Spacer(
+                    modifier = Modifier.height(4.dp)
+                )
 
-                    Spacer(
-                        modifier = Modifier.height(4.dp)
-                    )
-
+                val proyecto = persona.proyectoAsociado
+                if (!proyecto.isNullOrBlank()) {
                     Row(
 
                         verticalAlignment = Alignment.CenterVertically,
@@ -1020,6 +1149,35 @@ fun ProfileCard(
                             color = Color(0xFFBD0000),
 
                             fontWeight = FontWeight.Medium
+                        )
+                    }
+                } else {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+
+                        Icon(
+
+                            imageVector = Icons.Filled.Campaign,
+
+                            contentDescription = null,
+
+                            modifier = Modifier.size(16.dp),
+
+                            tint = Color.Gray
+                        )
+
+                        Spacer(
+                            modifier = Modifier.width(6.dp)
+                        )
+
+                        Text(
+
+                            text = "Proyecto: S/N",
+
+                            fontSize = 13.sp,
+
+                            color = Color.Gray
                         )
                     }
                 }
