@@ -2,6 +2,7 @@ package org.deltacv.actividad2
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -59,6 +60,9 @@ fun NewsDetailScreen(article: NewsArticle, onBack: () -> Unit) {
     val context = LocalContext.current
     val commentDao = remember { AppDatabase.getDatabase(context).commentDao() }
 
+    // Estado para abrir/cerrar el diálogo de zoom de la imagen
+    var isImageZoomed by remember { mutableStateOf(false) }
+
     var name by remember { mutableStateOf("") }
     var commentContent by remember { mutableStateOf("") }
     val comments = remember { mutableStateListOf<Comment>() }
@@ -107,14 +111,15 @@ fun NewsDetailScreen(article: NewsArticle, onBack: () -> Unit) {
                 .verticalScroll(scrollState)
                 .padding(16.dp)
         ) {
-            // Image from resources
+            // Imagen del artículo (Se vuelve clickeable para abrir el zoom)
             Image(
                 painter = painterResource(id = article.imageRes),
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(240.dp)
-                    .clip(RoundedCornerShape(16.dp)),
+                    .clip(RoundedCornerShape(16.dp))
+                    .clickable { isImageZoomed = true },
                 contentScale = ContentScale.Crop
             )
             Spacer(modifier = Modifier.height(24.dp))
@@ -161,7 +166,6 @@ fun NewsDetailScreen(article: NewsArticle, onBack: () -> Unit) {
                         ),
                         shape = RoundedCornerShape(12.dp)
                     ) {
-
                         Column(modifier = Modifier.padding(12.dp)) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -324,6 +328,14 @@ fun NewsDetailScreen(article: NewsArticle, onBack: () -> Unit) {
                 }
             }
         }
+    }
+
+    // Diálogo emergente para mostrar la imagen ampliada con zoom
+    if (isImageZoomed) {
+        ZoomableImageDialog(
+            imageResId = article.imageRes,
+            onDismiss = { isImageZoomed = false }
+        )
     }
 }
 

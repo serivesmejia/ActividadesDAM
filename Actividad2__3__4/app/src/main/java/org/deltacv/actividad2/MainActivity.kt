@@ -27,6 +27,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import org.deltacv.actividad2.ui.theme.Actividad2Theme
+import kotlin.time.Duration.Companion.milliseconds
 
 @Serializable
 object NewsListRoute
@@ -38,131 +39,72 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
         enableEdgeToEdge()
 
         setContent {
+            var isDarkMode by remember { mutableStateOf(false) }
 
-            // Variable que controla el modo oscuro
-            var isDarkMode by remember {
-                mutableStateOf(false)
-            }
-
-            Actividad2Theme(
-                darkTheme = isDarkMode
-            ) {
-
+            Actividad2Theme(darkTheme = isDarkMode) {
                 val navController = rememberNavController()
-
                 val scope = rememberCoroutineScope()
+                val currentBackStackEntry by navController.currentBackStackEntryAsState()
 
-                val currentBackStackEntry by
-                navController.currentBackStackEntryAsState()
-
-                // Color de fondo
-                val background = if (isDarkMode) {
-                    Color(0xFF121212)
-                } else {
-                    MaterialTheme.colorScheme.background
-                }
+                val background = if (isDarkMode) Color(0xFF121212) else MaterialTheme.colorScheme.background
 
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = background
                 ) {
-
                     NavHost(
                         navController = navController,
                         startDestination = NewsListRoute,
-
                         modifier = Modifier
                             .fillMaxSize()
                             .background(background),
-
-                        // Animación al entrar
                         enterTransition = {
                             slideInHorizontally(
                                 initialOffsetX = { it },
-                                animationSpec = tween(
-                                    durationMillis = 400
-                                )
+                                animationSpec = tween(durationMillis = 400)
                             )
                         },
-
-                        // Animación al salir
                         exitTransition = {
                             slideOutHorizontally(
                                 targetOffsetX = { -it },
-                                animationSpec = tween(
-                                    durationMillis = 400
-                                )
+                                animationSpec = tween(durationMillis = 400)
                             )
                         },
-
-                        // Animación al regresar
                         popEnterTransition = {
                             slideInHorizontally(
                                 initialOffsetX = { -it },
-                                animationSpec = tween(
-                                    durationMillis = 400
-                                )
+                                animationSpec = tween(durationMillis = 400)
                             )
                         },
-
-                        // Animación al salir regresando
                         popExitTransition = {
                             slideOutHorizontally(
                                 targetOffsetX = { it },
-                                animationSpec = tween(
-                                    durationMillis = 400
-                                )
+                                animationSpec = tween(durationMillis = 400)
                             )
                         }
-
                     ) {
-
-                        // Pantalla principal
                         composable<NewsListRoute> {
-
                             NewsScreen(
-
-                                // Enviamos el estado del modo oscuro
                                 isDarkMode = isDarkMode,
-
-                                // Cambiar entre claro y oscuro
-                                onToggleDarkMode = {
-                                    isDarkMode = !isDarkMode
-                                },
-
-                                // Cuando seleccionamos una noticia
+                                onToggleDarkMode = { isDarkMode = !isDarkMode },
                                 onArticleClick = { article ->
-
-                                    // Evitar múltiples navegaciones
-                                    val isAtRoot =
-                                        currentBackStackEntry
-                                            ?.destination
-                                            ?.route
-                                            ?.contains("NewsListRoute") == true
+                                    val isAtRoot = currentBackStackEntry
+                                        ?.destination
+                                        ?.route
+                                        ?.contains("NewsListRoute") == true
 
                                     if (isAtRoot) {
-
                                         scope.launch {
-
-                                            // Pequeña pausa para mostrar el tap
-                                            delay(150)
-
-                                            // Comprobar nuevamente antes de navegar
-                                            if (
-                                                navController
-                                                    .currentBackStackEntry
+                                            delay(150.milliseconds)
+                                            if (navController.currentBackStackEntry
                                                     ?.destination
                                                     ?.route
                                                     ?.contains("NewsListRoute") == true
                                             ) {
-
-                                                navController.navigate(
-                                                    NewsDetailRoute(article.id)
-                                                )
+                                                navController.navigate(NewsDetailRoute(article.id))
                                             }
                                         }
                                     }
@@ -170,31 +112,19 @@ class MainActivity : ComponentActivity() {
                             )
                         }
 
-                        // Pantalla de detalle
                         composable<NewsDetailRoute> { backStackEntry ->
-
-                            val route: NewsDetailRoute =
-                                backStackEntry.toRoute()
-
-                            val article =
-                                articles.find {
-                                    it.id == route.articleId
-                                }
+                            val route: NewsDetailRoute = backStackEntry.toRoute()
+                            val article = articles.find { it.id == route.articleId }
 
                             if (article != null) {
-
                                 NewsDetailScreen(
                                     article = article,
-
                                     onBack = {
-
-                                        if (
-                                            currentBackStackEntry
+                                        if (currentBackStackEntry
                                                 ?.destination
                                                 ?.route
                                                 ?.contains("NewsDetailRoute") == true
                                         ) {
-
                                             navController.popBackStack()
                                         }
                                     }
