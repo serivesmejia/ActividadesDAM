@@ -1,5 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <color name="color_primary">#B91C1C</color>
+    <color name="color_primary_dark">#991B1B</color>
+    <color name="color_primary_light">#FEE2E2</color>
+    <color name="color_background">#F5E6D8</color>
+    <color name="color_background_dark">#1A1009</color>
+    <color name="color_card">#FFFFFF</color>
+    <color name="color_card_dark">#2A1A10</color>
+    <color name="color_surface">#EDD8C8</color>
+    <color name="color_surface_dark">#231509</color>
+    <color name="color_muted">#D6C0AD</color>
+    <color name="color_muted_dark">#3D2415</color>
+    <color name="color_muted_fg">#78716C</color>
+    <color name="color_muted_fg_dark">#A8947E</color>
+    <color name="color_foreground">#1C1917</color>
+    <color name="color_foreground_dark">#F5F0EB</color>
+    <color name="color_border">#C8AE98</color>
+    <color name="color_border_dark">#4A2E1E</color>
+    <color name="color_nav">#8B0000</color>
+    <color name="color_nav_dark">#6B0000</color>
+
     <color name="purple_200">#FFBB86FC</color>
     <color name="purple_500">#FF6200EE</color>
     <color name="purple_700">#FF3700B3</color>
