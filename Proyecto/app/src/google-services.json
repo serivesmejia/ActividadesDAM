@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "814019274294",
+    "project_id": "bdaccionrover",
+    "storage_bucket": "bdaccionrover.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:814019274294:android:a1a130ef962de07f9f5a97",
+        "android_client_info": {
+          "package_name": "org.deltacv.myapplication"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDuGyzbpBkKtGj8vf9GyR6Qz0ca_gnTep0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

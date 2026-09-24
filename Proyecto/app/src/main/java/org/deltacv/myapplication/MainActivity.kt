@@ -19,9 +19,9 @@ import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.LightMode
-import androidx.compose.material3.*
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,10 +32,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import org.deltacv.myapplication.data.CloudRepository
-import org.deltacv.myapplication.data.ProyectoData
+import org.deltacv.myapplication.data.FirestoreManager
+import org.deltacv.myapplication.data.Proyecto
 import org.deltacv.myapplication.data.SessionManager
-import org.deltacv.myapplication.data.User
+import org.deltacv.myapplication.data.Usuario
 import org.deltacv.myapplication.ui.ProfileScreen
 import org.deltacv.myapplication.ui.ProjectDetailScreen
 import org.deltacv.myapplication.ui.theme.MyApplicationTheme
@@ -45,14 +45,16 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         val sessionManager = SessionManager(applicationContext)
-        val cloudRepository = CloudRepository(applicationContext)
 
         setContent {
             var isDarkTheme by remember { mutableStateOf(false) }
-            var currentUser by remember { mutableStateOf<User?>(null) }
+            var currentUserId by remember { mutableStateOf<String?>(null) }
             var mostrarLogin by remember { mutableStateOf(true) }
 
-            // Auto-login check on app startup
+            // Escuchar el estado del usuario activo en tiempo real mediante Flow
+            val currentUserState by FirestoreManager.obtenerUsuarioPorUid(currentUserId ?: "").collectAsState(initial = null)
+
+            // Auto-login automático si existen credenciales guardadas en el dispositivo
             LaunchedEffect(Unit) {
                 if (sessionManager.hasActiveSession()) {
                     val savedUserId = sessionManager.getSavedUserId()
@@ -60,47 +62,50 @@ class MainActivity : ComponentActivity() {
                     val savedCum = sessionManager.getSavedCum()
                     val savedPass = sessionManager.getSavedPass()
 
-                    val users = cloudRepository.getUsers()
-                    val matchedUser = users.find { user ->
-                        user.id == savedUserId ||
-                        ((user.correo == savedUserOrEmail || user.usuario == savedUserOrEmail) &&
-                         user.cum == savedCum && user.contrasena == savedPass)
-                    }
-
-                    if (matchedUser != null) {
-                        currentUser = matchedUser
+                    if (!savedUserId.isNullOrBlank()) {
+                        currentUserId = savedUserId
                         mostrarLogin = false
+                    } else if (!savedUserOrEmail.isNullOrBlank() && !savedCum.isNullOrBlank() && !savedPass.isNullOrBlank()) {
+                        FirestoreManager.buscarUsuarioParaLogin(
+                            identificador = savedUserOrEmail,
+                            cum = savedCum,
+                            contrasena = savedPass,
+                            onSuccess = { user ->
+                                if (user != null) {
+                                    currentUserId = user.uid
+                                    sessionManager.saveSession(savedUserOrEmail, savedCum, savedPass, user.uid)
+                                    mostrarLogin = false
+                                } else {
+                                    sessionManager.clearSession()
+                                }
+                            },
+                            onError = {
+                                sessionManager.clearSession()
+                            }
+                        )
                     }
                 }
             }
 
             MyApplicationTheme(darkTheme = isDarkTheme) {
-                if (mostrarLogin || currentUser == null) {
+                if (mostrarLogin || currentUserState == null) {
                     LoginScreen(
-                        cloudRepository = cloudRepository,
                         sessionManager = sessionManager,
                         onLoginSuccess = { user ->
-                            currentUser = user
+                            currentUserId = user.uid
                             mostrarLogin = false
                         }
                     )
                 } else {
                     MainScreen(
-                        currentUser = currentUser!!,
-                        cloudRepository = cloudRepository,
+                        currentUser = currentUserState!!,
                         sessionManager = sessionManager,
                         isDarkTheme = isDarkTheme,
                         onToggleDarkTheme = { isDarkTheme = !isDarkTheme },
                         onLogout = {
                             sessionManager.clearSession()
-                            currentUser = null
+                            currentUserId = null
                             mostrarLogin = true
-                        },
-                        onUserUpdated = { updatedUser ->
-                            cloudRepository.saveUser(updatedUser)
-                            if (updatedUser.id == currentUser?.id) {
-                                currentUser = updatedUser
-                            }
                         }
                     )
                 }
@@ -113,19 +118,18 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun LoginScreen(
-    cloudRepository: CloudRepository,
     sessionManager: SessionManager,
-    onLoginSuccess: (User) -> Unit
+    onLoginSuccess: (Usuario) -> Unit
 ) {
     var correoUsuario by remember { mutableStateOf("") }
     var cum by remember { mutableStateOf("") }
     var contrasena by remember { mutableStateOf("") }
     var mostrarRegistro by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var isLoading by remember { mutableStateOf(false) }
 
     if (mostrarRegistro) {
         RegistroScreen(
-            cloudRepository = cloudRepository,
             sessionManager = sessionManager,
             onBackClick = { mostrarRegistro = false },
             onRegistroSuccess = { newUser ->
@@ -220,43 +224,53 @@ fun LoginScreen(
 
                 Spacer(modifier = Modifier.height(20.dp))
 
-                // BOTÓN INICIAR SESIÓN
-                Button(
-                    onClick = {
-                        if (correoUsuario.isNotBlank() && cum.isNotBlank() && contrasena.isNotBlank()) {
-                            val users = cloudRepository.getUsers()
-                            val matched = users.find { user ->
-                                (user.correo == correoUsuario || user.usuario == correoUsuario) &&
-                                user.cum == cum && user.contrasena == contrasena
-                            }
-
-                            if (matched != null) {
-                                sessionManager.saveSession(correoUsuario, cum, contrasena, matched.id)
-                                onLoginSuccess(matched)
+                if (isLoading) {
+                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                } else {
+                    Button(
+                        onClick = {
+                            if (correoUsuario.isNotBlank() && cum.isNotBlank() && contrasena.isNotBlank()) {
+                                isLoading = true
+                                errorMessage = null
+                                FirestoreManager.buscarUsuarioParaLogin(
+                                    identificador = correoUsuario,
+                                    cum = cum,
+                                    contrasena = contrasena,
+                                    onSuccess = { matched ->
+                                        isLoading = false
+                                        if (matched != null) {
+                                            sessionManager.saveSession(correoUsuario, cum, contrasena, matched.uid)
+                                            onLoginSuccess(matched)
+                                        } else {
+                                            errorMessage = "Credenciales incorrectas o usuario no registrado."
+                                        }
+                                    },
+                                    onError = { e ->
+                                        isLoading = false
+                                        errorMessage = "Error de conexión: ${e.localizedMessage}"
+                                    }
+                                )
                             } else {
-                                errorMessage = "Credenciales incorrectas o usuario no registrado."
+                                errorMessage = "Por favor completa todos los campos."
                             }
-                        } else {
-                            errorMessage = "Por favor completa todos los campos."
-                        }
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(50.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                ) {
-                    Text(
-                        text = "Iniciar sesión",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(50.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        Text(
+                            text = "Iniciar sesión",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // REGISTRO
                 Row(
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically
@@ -279,10 +293,9 @@ fun LoginScreen(
 
 @Composable
 fun RegistroScreen(
-    cloudRepository: CloudRepository,
     sessionManager: SessionManager,
     onBackClick: () -> Unit,
-    onRegistroSuccess: (User) -> Unit
+    onRegistroSuccess: (Usuario) -> Unit = {}
 ) {
     var nombre by remember { mutableStateOf("") }
     var usuario by remember { mutableStateOf("") }
@@ -291,6 +304,10 @@ fun RegistroScreen(
     var contrasena by remember { mutableStateOf("") }
     var confirmarContrasena by remember { mutableStateOf("") }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var errorUsuarioMsg by remember { mutableStateOf<String?>(null) }
+    var errorCorreoMsg by remember { mutableStateOf<String?>(null) }
+    var errorCumMsg by remember { mutableStateOf<String?>(null) }
+    var isLoading by remember { mutableStateOf(false) }
 
     Box(
         modifier = Modifier
@@ -340,23 +357,51 @@ fun RegistroScreen(
 
                 OutlinedTextField(
                     value = usuario,
-                    onValueChange = { usuario = it },
+                    onValueChange = {
+                        usuario = it
+                        errorUsuarioMsg = null
+                    },
+                    isError = errorUsuarioMsg != null,
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text("Nombre de usuario") },
                     singleLine = true,
                     shape = RoundedCornerShape(12.dp)
                 )
+                errorUsuarioMsg?.let { msg ->
+                    Text(
+                        text = msg,
+                        color = MaterialTheme.colorScheme.error,
+                        fontSize = 12.sp,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 8.dp, top = 2.dp)
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(12.dp))
 
                 OutlinedTextField(
                     value = correo,
-                    onValueChange = { correo = it },
+                    onValueChange = {
+                        correo = it
+                        errorCorreoMsg = null
+                    },
+                    isError = errorCorreoMsg != null,
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text("Correo electrónico") },
                     singleLine = true,
                     shape = RoundedCornerShape(12.dp)
                 )
+                errorCorreoMsg?.let { msg ->
+                    Text(
+                        text = msg,
+                        color = MaterialTheme.colorScheme.error,
+                        fontSize = 12.sp,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 8.dp, top = 2.dp)
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(12.dp))
 
@@ -365,13 +410,25 @@ fun RegistroScreen(
                     onValueChange = { nuevoTexto ->
                         if (nuevoTexto.all { it.isLetterOrDigit() }) {
                             cum = nuevoTexto
+                            errorCumMsg = null
                         }
                     },
+                    isError = errorCumMsg != null,
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text("CUM") },
                     singleLine = true,
                     shape = RoundedCornerShape(12.dp)
                 )
+                errorCumMsg?.let { msg ->
+                    Text(
+                        text = msg,
+                        color = MaterialTheme.colorScheme.error,
+                        fontSize = 12.sp,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 8.dp, top = 2.dp)
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(12.dp))
 
@@ -399,41 +456,72 @@ fun RegistroScreen(
 
                 Spacer(modifier = Modifier.height(20.dp))
 
-                Button(
-                    onClick = {
-                        if (
-                            nombre.isNotBlank() && usuario.isNotBlank() && correo.isNotBlank() &&
-                            cum.isNotBlank() && contrasena.isNotBlank() && confirmarContrasena.isNotBlank()
-                        ) {
-                            if (contrasena != confirmarContrasena) {
-                                errorMessage = "Las contraseñas no coinciden."
+                if (isLoading) {
+                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                } else {
+                    Button(
+                        onClick = {
+                            errorUsuarioMsg = null
+                            errorCorreoMsg = null
+                            errorCumMsg = null
+                            errorMessage = null
+
+                            if (
+                                nombre.isNotBlank() && usuario.isNotBlank() && correo.isNotBlank() &&
+                                cum.isNotBlank() && contrasena.isNotBlank() && confirmarContrasena.isNotBlank()
+                            ) {
+                                if (contrasena != confirmarContrasena) {
+                                    errorMessage = "Las contraseñas no coinciden."
+                                } else {
+                                    isLoading = true
+                                    val newUser = Usuario(
+                                        nombreCompleto = nombre,
+                                        usuario = usuario,
+                                        correo = correo,
+                                        cum = cum,
+                                        contrasena = contrasena
+                                    )
+                                    FirestoreManager.verificarYRegistrarUsuario(
+                                        usuario = newUser,
+                                        onSuccess = {
+                                            isLoading = false
+                                            // Redirigir a la pantalla de Inicio de sesión
+                                            onBackClick()
+                                        },
+                                        onConflict = { usuarioExiste, correoExiste, cumExiste ->
+                                            isLoading = false
+                                            if (usuarioExiste) {
+                                                errorUsuarioMsg = "Nombre de usuario inválido"
+                                            }
+                                            if (correoExiste) {
+                                                errorCorreoMsg = "Correo electrónico inválido"
+                                            }
+                                            if (cumExiste) {
+                                                errorCumMsg = "CUM inválido"
+                                            }
+                                        },
+                                        onError = { e ->
+                                            isLoading = false
+                                            errorMessage = "Error al registrar: ${e.localizedMessage}"
+                                        }
+                                    )
+                                }
                             } else {
-                                val newUser = User(
-                                    nombre = nombre,
-                                    usuario = usuario,
-                                    correo = correo,
-                                    cum = cum,
-                                    contrasena = contrasena
-                                )
-                                cloudRepository.saveUser(newUser)
-                                sessionManager.saveSession(usuario, cum, contrasena, newUser.id)
-                                onRegistroSuccess(newUser)
+                                errorMessage = "Por favor completa todos los campos."
                             }
-                        } else {
-                            errorMessage = "Por favor completa todos los campos."
-                        }
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(50.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                ) {
-                    Text(
-                        text = "Crear cuenta",
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold
-                    )
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(50.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        Text(
+                            text = "Crear cuenta",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -456,55 +544,35 @@ fun RegistroScreen(
     }
 }
 
-// PANTALLA PRINCIPAL CON TOPBAR NAVEGADOR SUPERIOR
+// PANTALLA PRINCIPAL CON NAVEGADOR SUPERIOR Y ESTADO FIRESTORE EN TIEMPO REAL
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(
-    currentUser: User,
-    cloudRepository: CloudRepository,
+    currentUser: Usuario,
     sessionManager: SessionManager,
     isDarkTheme: Boolean,
     onToggleDarkTheme: () -> Unit,
-    onLogout: () -> Unit,
-    onUserUpdated: (User) -> Unit
+    onLogout: () -> Unit
 ) {
-    var selectedTab by remember { mutableStateOf(0) } // 0: Inicio (Usuarios), 1: Proyectos
-    var selectedUserForProfile by remember { mutableStateOf<User?>(null) }
-    var selectedProjectForDetail by remember { mutableStateOf<ProyectoData?>(null) }
+    var selectedTab by remember { mutableIntStateOf(0) } // 0: Inicio (Usuarios), 1: Proyectos
+    var selectedUserForProfile by remember { mutableStateOf<Usuario?>(null) }
+    var selectedProjectForDetail by remember { mutableStateOf<Proyecto?>(null) }
 
     val primaryColor = MaterialTheme.colorScheme.primary
 
-    // Refresh states from cloud
-    var usersList by remember { mutableStateOf(cloudRepository.getUsers()) }
-    var projectsList by remember { mutableStateOf(cloudRepository.getProjects()) }
+    // Consumo del estado en tiempo real de Firestore mediante Flow.collectAsState()
+    val usersList by FirestoreManager.obtenerTodosLosUsuarios().collectAsState(initial = emptyList())
+    val projectsList by FirestoreManager.obtenerTodosLosProyectos().collectAsState(initial = emptyList())
 
-    fun refreshData() {
-        usersList = cloudRepository.getUsers()
-        projectsList = cloudRepository.getProjects()
-    }
-
-    // Sub-screeen: Detalle de perfil
+    // Sub-screen: Detalle de perfil
     if (selectedUserForProfile != null) {
         val userToDisplay = selectedUserForProfile!!
-        val userOwnProjects = projectsList.filter { it.creadorId == userToDisplay.id }
-        val userVolunteerProjects = projectsList.filter { it.participantesIds.contains(userToDisplay.id) }
 
         ProfileScreen(
             user = userToDisplay,
             currentUser = currentUser,
-            userProjects = userOwnProjects,
-            volunteerProjects = userVolunteerProjects,
             onBackClick = { selectedUserForProfile = null },
-            onEditProfile = { updatedUser ->
-                onUserUpdated(updatedUser)
-                refreshData()
-                selectedUserForProfile = updatedUser
-            },
-            onCreateProject = { newProj ->
-                cloudRepository.saveProject(newProj)
-                refreshData()
-            },
             onSelectProject = { proj ->
                 selectedProjectForDetail = proj
             }
@@ -518,22 +586,7 @@ fun MainScreen(
         ProjectDetailScreen(
             proyecto = proj,
             currentUser = currentUser,
-            onBackClick = { selectedProjectForDetail = null },
-            onToggleVolunteer = {
-                cloudRepository.toggleVolunteer(proj.id, currentUser.id)
-                refreshData()
-                selectedProjectForDetail = cloudRepository.getProjects().find { it.id == proj.id }
-            },
-            onEditProject = { updatedProj ->
-                cloudRepository.saveProject(updatedProj)
-                refreshData()
-                selectedProjectForDetail = updatedProj
-            },
-            onDeleteProject = { projId ->
-                cloudRepository.deleteProject(projId)
-                refreshData()
-                selectedProjectForDetail = null
-            }
+            onBackClick = { selectedProjectForDetail = null }
         )
         return
     }
@@ -543,7 +596,7 @@ fun MainScreen(
             TopAppBar(
                 title = { Text("RoverAcción", fontWeight = FontWeight.Bold, fontSize = 20.sp) },
                 actions = {
-                    // 5a. Botón Modo Oscuro
+                    // Botón Modo Oscuro
                     IconButton(onClick = onToggleDarkTheme) {
                         Icon(
                             imageVector = if (isDarkTheme) Icons.Filled.LightMode else Icons.Filled.DarkMode,
@@ -551,7 +604,7 @@ fun MainScreen(
                             tint = Color.White
                         )
                     }
-                    // 5a. Botón para ver perfil personal
+                    // Botón para ver perfil personal
                     IconButton(onClick = { selectedUserForProfile = currentUser }) {
                         Icon(
                             imageVector = Icons.Filled.Person,
@@ -559,7 +612,7 @@ fun MainScreen(
                             tint = Color.White
                         )
                     }
-                    // 5b. Botón para salir de la cuenta
+                    // Botón para salir de la cuenta
                     IconButton(onClick = onLogout) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ExitToApp,
@@ -578,10 +631,7 @@ fun MainScreen(
             NavigationBar(containerColor = primaryColor) {
                 NavigationBarItem(
                     selected = selectedTab == 0,
-                    onClick = {
-                        selectedTab = 0
-                        refreshData()
-                    },
+                    onClick = { selectedTab = 0 },
                     icon = { Icon(Icons.Filled.Book, contentDescription = "Inicio") },
                     label = { Text("Inicio", color = Color.White) },
                     colors = NavigationBarItemDefaults.colors(
@@ -594,10 +644,7 @@ fun MainScreen(
 
                 NavigationBarItem(
                     selected = selectedTab == 1,
-                    onClick = {
-                        selectedTab = 1
-                        refreshData()
-                    },
+                    onClick = { selectedTab = 1 },
                     icon = { Icon(Icons.Filled.Campaign, contentDescription = "Proyectos") },
                     label = { Text("Proyectos", color = Color.White) },
                     colors = NavigationBarItemDefaults.colors(
@@ -612,7 +659,7 @@ fun MainScreen(
     ) { innerPadding ->
         Box(modifier = Modifier.padding(innerPadding)) {
             when (selectedTab) {
-                // 4. PÁGINA DE INICIO (USUARIOS REGISTRADOS)
+                // PÁGINA DE INICIO (USUARIOS REGISTRADOS EN TIEMPO REAL DESDE FIRESTORE)
                 0 -> {
                     LazyColumn(
                         modifier = Modifier
@@ -635,7 +682,6 @@ fun MainScreen(
                                 user = user,
                                 nameColor = primaryColor,
                                 onClick = {
-                                    // 4b. Ver perfil de usuario (lectura si es tercero)
                                     selectedUserForProfile = user
                                 }
                             )
@@ -643,7 +689,7 @@ fun MainScreen(
                     }
                 }
 
-                // PROYECTOS REGISTRADOS
+                // PROYECTOS REGISTRADOS EN TIEMPO REAL DESDE FIRESTORE
                 1 -> {
                     LazyColumn(
                         modifier = Modifier
@@ -677,7 +723,7 @@ fun MainScreen(
 
 @Composable
 fun ProjectCard(
-    project: ProyectoData,
+    project: Proyecto,
     onClick: () -> Unit
 ) {
     Card(
@@ -705,16 +751,10 @@ fun ProjectCard(
                 color = MaterialTheme.colorScheme.secondary
             )
 
-            Text(
-                text = "Creado por: ${project.creadorNombre}",
-                fontSize = 14.sp,
-                color = Color.Gray
-            )
-
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = "Objetivo: ${project.objetivoPrincipal}",
+                text = "Objetivo: ${project.objetivoGeneral}",
                 fontSize = 14.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 lineHeight = 20.sp
@@ -728,7 +768,7 @@ fun ProjectCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Voluntarios: ${project.participantesIds.size}",
+                    text = "Voluntarios: ${project.voluntariosIds.size}",
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.primary
@@ -749,11 +789,9 @@ fun ProjectCard(
 
 // TARJETA DE PERSONA / USUARIO
 
-fun String?.orSN(): String = if (this.isNullOrBlank()) "S/N" else this
-
 @Composable
 fun ProfileCard(
-    user: User,
+    user: Usuario,
     nameColor: Color,
     onClick: () -> Unit
 ) {
@@ -790,39 +828,31 @@ fun ProfileCard(
             Spacer(modifier = Modifier.width(16.dp))
 
             Column {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = user.nombre.orSN(),
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = nameColor
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = user.cargo.orSN(),
-                        fontSize = 14.sp,
-                        color = Color.Gray
-                    )
-                }
+                Text(
+                    text = user.nombreCompleto.ifBlank { "S/N" },
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = nameColor
+                )
 
                 Spacer(modifier = Modifier.height(4.dp))
 
                 Text(
-                    text = "Usuario: @${user.usuario.orSN()}",
+                    text = "Usuario: @${user.usuario.ifBlank { "S/N" }}",
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onSurface
                 )
 
                 Text(
-                    text = "CUM: ${user.cum.orSN()}",
+                    text = "CUM: ${user.cum.ifBlank { "S/N" }}",
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onSurface
                 )
 
                 Spacer(modifier = Modifier.height(4.dp))
 
-                ContactItem(icon = Icons.Filled.Phone, text = user.telefono.orSN())
-                ContactItem(icon = Icons.Filled.Email, text = user.correo.orSN())
+                ContactItem(icon = Icons.Filled.Phone, text = user.telefono?.ifBlank { "S/N" } ?: "S/N")
+                ContactItem(icon = Icons.Filled.Email, text = user.correo.ifBlank { "S/N" })
             }
         }
     }

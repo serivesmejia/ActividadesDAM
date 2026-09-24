@@ -25,33 +25,33 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import org.deltacv.myapplication.data.ProyectoData
-import org.deltacv.myapplication.data.TareaCronogramaData
-import org.deltacv.myapplication.data.User
+import org.deltacv.myapplication.data.FirestoreManager
+import org.deltacv.myapplication.data.Proyecto
+import org.deltacv.myapplication.data.Usuario
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(
-    user: User,
-    currentUser: User,
-    userProjects: List<ProyectoData>,
-    volunteerProjects: List<ProyectoData>,
+    user: Usuario,
+    currentUser: Usuario,
     onBackClick: () -> Unit,
-    onEditProfile: (User) -> Unit,
-    onCreateProject: (ProyectoData) -> Unit,
-    onSelectProject: (ProyectoData) -> Unit
+    onSelectProject: (Proyecto) -> Unit
 ) {
-    val isOwnProfile = user.id == currentUser.id
-    var selectedTab by remember { mutableStateOf(0) } // 0: Proyectos propios, 1: Voluntariado
+    val isOwnProfile = user.uid == currentUser.uid
+    var selectedTab by remember { mutableIntStateOf(0) } // 0: Proyectos propios, 1: Voluntariado
     var showEditProfileDialog by remember { mutableStateOf(false) }
     var showCreateProjectDialog by remember { mutableStateOf(false) }
+
+    // Consumo de Flow en tiempo real desde FirestoreManager
+    val userProjects by FirestoreManager.obtenerProyectosPorResponsable(user.uid).collectAsState(initial = emptyList())
+    val volunteerProjects by FirestoreManager.obtenerProyectosPorVoluntario(user.uid).collectAsState(initial = emptyList())
 
     val primaryColor = MaterialTheme.colorScheme.primary
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (isOwnProfile) "Mi Perfil" else "Perfil de ${user.nombre}", fontSize = 18.sp) },
+                title = { Text(if (isOwnProfile) "Mi Perfil" else "Perfil de ${user.nombreCompleto}", fontSize = 18.sp) },
                 navigationIcon = {
                     IconButton(onClick = onBackClick) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Regresar")
@@ -84,7 +84,7 @@ fun ProfileScreen(
                         .padding(16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // i. Foto del lado izquierdo
+                    // Foto del lado izquierdo
                     Box(
                         modifier = Modifier
                             .size(80.dp)
@@ -102,18 +102,18 @@ fun ProfileScreen(
 
                     Spacer(modifier = Modifier.width(16.dp))
 
-                    // ii. Columna de datos del lado derecho
+                    // Columna de datos del lado derecho
                     Column(
                         modifier = Modifier.weight(1f)
                     ) {
                         Text(
-                            text = if (user.nombre.isNotBlank()) user.nombre else "S/N",
+                            text = user.nombreCompleto.ifBlank { "S/N" },
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "@${if (user.usuario.isNotBlank()) user.usuario else "S/N"}",
+                            text = "@${user.usuario.ifBlank { "S/N" }}",
                             fontSize = 14.sp,
                             color = MaterialTheme.colorScheme.secondary
                         )
@@ -121,16 +121,16 @@ fun ProfileScreen(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Filled.Email, contentDescription = null, modifier = Modifier.size(14.dp), tint = Color.Gray)
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text(text = if (user.correo.isNotBlank()) user.correo else "S/N", fontSize = 12.sp, color = Color.Gray)
+                            Text(text = user.correo.ifBlank { "S/N" }, fontSize = 12.sp, color = Color.Gray)
                         }
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Filled.Phone, contentDescription = null, modifier = Modifier.size(14.dp), tint = Color.Gray)
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text(text = if (user.telefono.isNotBlank()) user.telefono else "S/N", fontSize = 12.sp, color = Color.Gray)
+                            Text(text = user.telefono?.ifBlank { "S/N" } ?: "S/N", fontSize = 12.sp, color = Color.Gray)
                         }
                     }
 
-                    // iii & v. Si es perfil personal, botones de Editar y Botón + para crear proyecto
+                    // Botones de Edición y Botón + (Crear proyecto)
                     if (isOwnProfile) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             IconButton(onClick = { showEditProfileDialog = true }) {
@@ -144,8 +144,8 @@ fun ProfileScreen(
                 }
             }
 
-            // b. BARRA DE NAVEGACIÓN INTERNA
-            TabRow(
+            // BARRA DE NAVEGACIÓN INTERNA
+            PrimaryTabRow(
                 selectedTabIndex = selectedTab,
                 containerColor = MaterialTheme.colorScheme.surface
             ) {
@@ -163,7 +163,7 @@ fun ProfileScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // LISTA DE PROYECTOS SEGÚN LA PESTAÑA
+            // LISTA DE PROYECTOS SEGÚN LA PESTAÑA SELECCIONADA
             val projectsToShow = if (selectedTab == 0) userProjects else volunteerProjects
 
             if (projectsToShow.isEmpty()) {
@@ -210,7 +210,7 @@ fun ProfileScreen(
                                 )
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    text = "Voluntarios: ${project.participantesIds.size}",
+                                    text = "Voluntarios: ${project.voluntariosIds.size}",
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Medium,
                                     color = primaryColor
@@ -225,10 +225,10 @@ fun ProfileScreen(
 
     // DIÁLOGO PARA EDITAR PERFIL
     if (showEditProfileDialog) {
-        var editedNombre by remember { mutableStateOf(user.nombre) }
+        var editedNombre by remember { mutableStateOf(user.nombreCompleto) }
         var editedUsuario by remember { mutableStateOf(user.usuario) }
         var editedCorreo by remember { mutableStateOf(user.correo) }
-        var editedTelefono by remember { mutableStateOf(user.telefono) }
+        var editedTelefono by remember { mutableStateOf(user.telefono ?: "") }
 
         AlertDialog(
             onDismissRequest = { showEditProfileDialog = false },
@@ -269,12 +269,12 @@ fun ProfileScreen(
                     onClick = {
                         if (editedNombre.isNotBlank() && editedUsuario.isNotBlank() && editedCorreo.isNotBlank()) {
                             val updatedUser = user.copy(
-                                nombre = editedNombre,
+                                nombreCompleto = editedNombre,
                                 usuario = editedUsuario,
                                 correo = editedCorreo,
                                 telefono = editedTelefono
                             )
-                            onEditProfile(updatedUser)
+                            FirestoreManager.registrarUsuario(updatedUser, onSuccess = {}, onError = {})
                             showEditProfileDialog = false
                         }
                     }
@@ -294,15 +294,14 @@ fun ProfileScreen(
     if (showCreateProjectDialog) {
         var titulo by remember { mutableStateOf("") }
         var ods by remember { mutableStateOf("") }
-        var objetivoPrincipal by remember { mutableStateOf("") }
+        var objetivoGeneral by remember { mutableStateOf("") }
         var antecedentes by remember { mutableStateOf("") }
         var justificacion by remember { mutableStateOf("") }
         var objetivosEspecificos by remember { mutableStateOf("") }
         var alcance by remember { mutableStateOf("") }
-        var descripcionGeneral by remember { mutableStateOf("") }
-        var recursosNecesarios by remember { mutableStateOf("") }
-        var resultadosEsperados by remember { mutableStateOf("") }
-        var responsables by remember { mutableStateOf(user.nombre) }
+        var descripcionGen by remember { mutableStateOf("") }
+        var recursos by remember { mutableStateOf("") }
+        var resultados by remember { mutableStateOf("") }
         var errorMessage by remember { mutableStateOf<String?>(null) }
 
         AlertDialog(
@@ -319,7 +318,7 @@ fun ProfileScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(value = ods, onValueChange = { ods = it }, label = { Text("ODS *") }, modifier = Modifier.fillMaxWidth())
                     Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(value = objetivoPrincipal, onValueChange = { objetivoPrincipal = it }, label = { Text("Objetivo Principal *") }, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(value = objetivoGeneral, onValueChange = { objetivoGeneral = it }, label = { Text("Objetivo General *") }, modifier = Modifier.fillMaxWidth())
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(value = antecedentes, onValueChange = { antecedentes = it }, label = { Text("Antecedentes *") }, modifier = Modifier.fillMaxWidth())
                     Spacer(modifier = Modifier.height(8.dp))
@@ -329,49 +328,44 @@ fun ProfileScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(value = alcance, onValueChange = { alcance = it }, label = { Text("Alcance *") }, modifier = Modifier.fillMaxWidth())
                     Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(value = descripcionGeneral, onValueChange = { descripcionGeneral = it }, label = { Text("Descripción General *") }, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(value = descripcionGen, onValueChange = { descripcionGen = it }, label = { Text("Descripción General *") }, modifier = Modifier.fillMaxWidth())
                     Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(value = recursosNecesarios, onValueChange = { recursosNecesarios = it }, label = { Text("Recursos Necesarios *") }, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(value = recursos, onValueChange = { recursos = it }, label = { Text("Recursos Necesarios *") }, modifier = Modifier.fillMaxWidth())
                     Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(value = resultadosEsperados, onValueChange = { resultadosEsperados = it }, label = { Text("Resultados Esperados *") }, modifier = Modifier.fillMaxWidth())
-                    Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(value = responsables, onValueChange = { responsables = it }, label = { Text("Responsables y Contacto *") }, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(value = resultados, onValueChange = { resultados = it }, label = { Text("Resultados Esperados *") }, modifier = Modifier.fillMaxWidth())
                 }
             },
             confirmButton = {
                 Button(
                     onClick = {
                         if (
-                            titulo.isBlank() || ods.isBlank() || objetivoPrincipal.isBlank() ||
+                            titulo.isBlank() || ods.isBlank() || objetivoGeneral.isBlank() ||
                             antecedentes.isBlank() || justificacion.isBlank() || objetivosEspecificos.isBlank() ||
-                            alcance.isBlank() || descripcionGeneral.isBlank() || recursosNecesarios.isBlank() ||
-                            resultadosEsperados.isBlank() || responsables.isBlank()
+                            alcance.isBlank() || descripcionGen.isBlank() || recursos.isBlank() ||
+                            resultados.isBlank()
                         ) {
                             errorMessage = "Por favor completa todos los campos requeridos."
                         } else {
-                            val newProject = ProyectoData(
-                                creadorId = user.id,
-                                creadorNombre = user.nombre,
+                            val newProject = Proyecto(
                                 titulo = titulo,
                                 ods = ods,
-                                objetivoPrincipal = objetivoPrincipal,
+                                objetivoGeneral = objetivoGeneral,
                                 antecedentes = antecedentes,
                                 justificacion = justificacion,
                                 objetivosEspecificos = objetivosEspecificos,
                                 alcance = alcance,
-                                descripcionGeneral = descripcionGeneral,
-                                recursosNecesarios = recursosNecesarios,
-                                cronograma = listOf(
-                                    TareaCronogramaData("Planificación", 0, 1),
-                                    TareaCronogramaData("Ejecución", 1, 1),
-                                    TareaCronogramaData("Evaluación", 2, 1)
-                                ),
-                                resultadosEsperados = resultadosEsperados,
-                                responsables = responsables,
-                                participantesIds = emptyList()
+                                descripcionGen = descripcionGen,
+                                recursos = recursos,
+                                resultados = resultados,
+                                responsablesIds = listOf(user.uid),
+                                voluntariosIds = emptyList()
                             )
-                            onCreateProject(newProject)
-                            showCreateProjectDialog = false
+                            FirestoreManager.crearProyecto(
+                                proyecto = newProject,
+                                responsableUid = user.uid,
+                                onSuccess = { showCreateProjectDialog = false },
+                                onError = { errorMessage = "Error al crear el proyecto: ${it.localizedMessage}" }
+                            )
                         }
                     }
                 ) {

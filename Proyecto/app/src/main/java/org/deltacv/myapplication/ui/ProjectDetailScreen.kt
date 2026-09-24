@@ -23,22 +23,19 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import org.deltacv.myapplication.data.ProyectoData
-import org.deltacv.myapplication.data.TareaCronogramaData
-import org.deltacv.myapplication.data.User
+import org.deltacv.myapplication.data.FirestoreManager
+import org.deltacv.myapplication.data.Proyecto
+import org.deltacv.myapplication.data.Usuario
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProjectDetailScreen(
-    proyecto: ProyectoData,
-    currentUser: User,
-    onBackClick: () -> Unit,
-    onToggleVolunteer: () -> Unit,
-    onEditProject: (ProyectoData) -> Unit,
-    onDeleteProject: (String) -> Unit
+    proyecto: Proyecto,
+    currentUser: Usuario,
+    onBackClick: () -> Unit
 ) {
-    val isOwner = proyecto.creadorId == currentUser.id
-    val isVolunteer = proyecto.participantesIds.contains(currentUser.id)
+    val isOwner = proyecto.responsablesIds.contains(currentUser.uid)
+    val isVolunteer = proyecto.voluntariosIds.contains(currentUser.uid)
 
     var showEditDialog by remember { mutableStateOf(false) }
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
@@ -119,7 +116,7 @@ fun ProjectDetailScreen(
                     Icon(Icons.Filled.People, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Participantes registrados: ${proyecto.participantesIds.size}",
+                        text = "Voluntarios registrados: ${proyecto.voluntariosIds.size}",
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onPrimaryContainer
@@ -135,7 +132,7 @@ fun ProjectDetailScreen(
                 backgroundColor = Color(0xFFD1E8E2)
             ) {
                 ProjectField("ODS que está trabajando", proyecto.ods)
-                ProjectField("Objetivo principal", proyecto.objetivoPrincipal)
+                ProjectField("Objetivo principal", proyecto.objetivoGeneral)
                 ProjectField("Objetivos específicos", proyecto.objetivosEspecificos)
             }
 
@@ -158,37 +155,28 @@ fun ProjectDetailScreen(
                 backgroundColor = Color(0xFFE1D5E7)
             ) {
                 ProjectField("Alcance", proyecto.alcance)
-                ProjectField("Descripción general", proyecto.descripcionGeneral)
-                ProjectField("Recursos necesarios", proyecto.recursosNecesarios)
-
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "Cronograma",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp,
-                    color = Color(0xFF555555)
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                ScheduleChart(tareas = proyecto.cronograma)
+                ProjectField("Descripción general", proyecto.descripcionGen)
+                ProjectField("Recursos necesarios", proyecto.recursos)
             }
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Sección 4: Resultados y Contacto
+            // Sección 4: Resultados
             CollapsibleSection(
-                title = "Resultados y Contacto",
+                title = "Resultados",
                 backgroundColor = Color(0xFFD5E8D4)
             ) {
-                ProjectField("Resultados esperados", proyecto.resultadosEsperados)
-                ProjectField("Responsables y formas de contacto", proyecto.responsables)
+                ProjectField("Resultados esperados", proyecto.resultados)
             }
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // Botón de Voluntariado (para terceros)
+            // Botón de Voluntariado (para usuarios no creadores)
             if (!isOwner) {
                 Button(
-                    onClick = onToggleVolunteer,
+                    onClick = {
+                        FirestoreManager.agregarVoluntarioAProyecto(proyecto.id, currentUser.uid)
+                    },
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = if (isVolunteer) MaterialTheme.colorScheme.error else primaryColor
@@ -217,15 +205,14 @@ fun ProjectDetailScreen(
     if (showEditDialog) {
         var editedTitulo by remember { mutableStateOf(proyecto.titulo) }
         var editedOds by remember { mutableStateOf(proyecto.ods) }
-        var editedObjetivoPrincipal by remember { mutableStateOf(proyecto.objetivoPrincipal) }
+        var editedObjetivoGeneral by remember { mutableStateOf(proyecto.objetivoGeneral) }
         var editedAntecedentes by remember { mutableStateOf(proyecto.antecedentes) }
         var editedJustificacion by remember { mutableStateOf(proyecto.justificacion) }
         var editedObjetivosEspecificos by remember { mutableStateOf(proyecto.objetivosEspecificos) }
         var editedAlcance by remember { mutableStateOf(proyecto.alcance) }
-        var editedDescripcionGeneral by remember { mutableStateOf(proyecto.descripcionGeneral) }
-        var editedRecursosNecesarios by remember { mutableStateOf(proyecto.recursosNecesarios) }
-        var editedResultadosEsperados by remember { mutableStateOf(proyecto.resultadosEsperados) }
-        var editedResponsables by remember { mutableStateOf(proyecto.responsables) }
+        var editedDescripcionGen by remember { mutableStateOf(proyecto.descripcionGen) }
+        var editedRecursos by remember { mutableStateOf(proyecto.recursos) }
+        var editedResultados by remember { mutableStateOf(proyecto.resultados) }
 
         AlertDialog(
             onDismissRequest = { showEditDialog = false },
@@ -236,7 +223,7 @@ fun ProjectDetailScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(value = editedOds, onValueChange = { editedOds = it }, label = { Text("ODS") }, modifier = Modifier.fillMaxWidth())
                     Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(value = editedObjetivoPrincipal, onValueChange = { editedObjetivoPrincipal = it }, label = { Text("Objetivo Principal") }, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(value = editedObjetivoGeneral, onValueChange = { editedObjetivoGeneral = it }, label = { Text("Objetivo General") }, modifier = Modifier.fillMaxWidth())
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(value = editedAntecedentes, onValueChange = { editedAntecedentes = it }, label = { Text("Antecedentes") }, modifier = Modifier.fillMaxWidth())
                     Spacer(modifier = Modifier.height(8.dp))
@@ -246,33 +233,29 @@ fun ProjectDetailScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(value = editedAlcance, onValueChange = { editedAlcance = it }, label = { Text("Alcance") }, modifier = Modifier.fillMaxWidth())
                     Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(value = editedDescripcionGeneral, onValueChange = { editedDescripcionGeneral = it }, label = { Text("Descripción General") }, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(value = editedDescripcionGen, onValueChange = { editedDescripcionGen = it }, label = { Text("Descripción General") }, modifier = Modifier.fillMaxWidth())
                     Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(value = editedRecursosNecesarios, onValueChange = { editedRecursosNecesarios = it }, label = { Text("Recursos Necesarios") }, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(value = editedRecursos, onValueChange = { editedRecursos = it }, label = { Text("Recursos Necesarios") }, modifier = Modifier.fillMaxWidth())
                     Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(value = editedResultadosEsperados, onValueChange = { editedResultadosEsperados = it }, label = { Text("Resultados Esperados") }, modifier = Modifier.fillMaxWidth())
-                    Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(value = editedResponsables, onValueChange = { editedResponsables = it }, label = { Text("Responsables") }, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(value = editedResultados, onValueChange = { editedResultados = it }, label = { Text("Resultados Esperados") }, modifier = Modifier.fillMaxWidth())
                 }
             },
             confirmButton = {
                 Button(
                     onClick = {
-                        val updatedProj = proyecto.copy(
-                            titulo = editedTitulo,
-                            ods = editedOds,
-                            objetivoPrincipal = editedObjetivoPrincipal,
-                            antecedentes = editedAntecedentes,
-                            justificacion = editedJustificacion,
-                            objetivosEspecificos = editedObjetivosEspecificos,
-                            alcance = editedAlcance,
-                            descripcionGeneral = editedDescripcionGeneral,
-                            recursosNecesarios = editedRecursosNecesarios,
-                            resultadosEsperados = editedResultadosEsperados,
-                            responsables = editedResponsables
+                        val mapUpdates = mapOf<String, Any>(
+                            "titulo" to editedTitulo,
+                            "ods" to editedOds,
+                            "objetivoGeneral" to editedObjetivoGeneral,
+                            "antecedentes" to editedAntecedentes,
+                            "justificacion" to editedJustificacion,
+                            "objetivosEspecificos" to editedObjetivosEspecificos,
+                            "alcance" to editedAlcance,
+                            "descripcionGen" to editedDescripcionGen,
+                            "recursos" to editedRecursos,
+                            "resultados" to editedResultados
                         )
-                        onEditProject(updatedProj)
-                        showEditDialog = false
+                        FirestoreManager.editarProyecto(proyecto.id, mapUpdates, onSuccess = { showEditDialog = false }, onError = {})
                     }
                 ) {
                     Text("Guardar cambios")
@@ -296,7 +279,7 @@ fun ProjectDetailScreen(
                 Button(
                     onClick = {
                         showDeleteConfirmDialog = false
-                        onDeleteProject(proyecto.id)
+                        FirestoreManager.eliminarProyecto(proyecto.id, onSuccess = { onBackClick() }, onError = {})
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                 ) {
@@ -309,87 +292,6 @@ fun ProjectDetailScreen(
                 }
             }
         )
-    }
-}
-
-@Composable
-fun ScheduleChart(tareas: List<TareaCronogramaData>) {
-    val maxMes = tareas.maxOfOrNull { it.mesInicio + it.duracion } ?: 3
-    val meses = if (maxMes <= 2) listOf("Jul", "Ago") else listOf("Sep", "Oct", "Nov")
-    val numColumnas = meses.size
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 100.dp)
-        ) {
-            meses.forEach { mes ->
-                Text(
-                    text = mes,
-                    modifier = Modifier.weight(1f),
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.Gray
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(4.dp))
-
-        tareas.forEach { tarea ->
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp)
-            ) {
-                Text(
-                    text = tarea.nombre,
-                    modifier = Modifier.width(100.dp),
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-
-                Box(
-                    modifier = Modifier
-                        .weight(numColumnas.toFloat())
-                        .height(16.dp)
-                ) {
-                    Row(modifier = Modifier.fillMaxSize()) {
-                        repeat(numColumnas) {
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .fillMaxHeight()
-                                    .background(Color.Gray.copy(alpha = 0.2f))
-                            )
-                        }
-                    }
-
-                    Row(modifier = Modifier.fillMaxSize()) {
-                        if (tarea.mesInicio > 0) {
-                            Spacer(modifier = Modifier.weight(tarea.mesInicio.toFloat()))
-                        }
-                        Box(
-                            modifier = Modifier
-                                .weight(tarea.duracion.toFloat())
-                                .fillMaxHeight()
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.7f))
-                        )
-                        val restante = numColumnas - (tarea.mesInicio + tarea.duracion)
-                        if (restante > 0) {
-                            Spacer(modifier = Modifier.weight(restante.toFloat()))
-                        }
-                    }
-                }
-            }
-        }
     }
 }
 
