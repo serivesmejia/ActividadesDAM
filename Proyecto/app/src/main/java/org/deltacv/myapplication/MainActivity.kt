@@ -485,7 +485,6 @@ fun RegistroScreen(
                                         usuario = newUser,
                                         onSuccess = {
                                             isLoading = false
-                                            // Redirigir a la pantalla de Inicio de sesión
                                             onBackClick()
                                         },
                                         onConflict = { usuarioExiste, correoExiste, cumExiste ->
