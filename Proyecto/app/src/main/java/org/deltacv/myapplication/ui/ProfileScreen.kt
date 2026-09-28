@@ -362,9 +362,8 @@ fun ProfileScreen(
                             )
                             FirestoreManager.crearProyecto(
                                 proyecto = newProject,
-                                responsableUid = user.uid,
                                 onSuccess = { showCreateProjectDialog = false },
-                                onError = { errorMessage = "Error al crear el proyecto: ${it.localizedMessage}" }
+                                onError = { errorMessage = "Error al crear el proyecto: $it" }
                             )
                         }
                     }

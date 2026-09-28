@@ -2,6 +2,7 @@ package org.deltacv.myapplication.data
 
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.QuerySnapshot
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -9,52 +10,6 @@ import kotlinx.coroutines.flow.callbackFlow
 object FirestoreManager {
     private val db: FirebaseFirestore
         get() = FirebaseFirestore.getInstance()
-
-    // 1. USUARIOS
-    fun registrarUsuario(
-        usuario: Usuario,
-        onSuccess: () -> Unit,
-        onError: (Exception) -> Unit
-    ) {
-        val collectionRef = db.collection("usuarios")
-        val docRef = if (usuario.uid.isNotBlank()) collectionRef.document(usuario.uid) else collectionRef.document()
-        val finalUsuario = usuario.copy(uid = docRef.id)
-        docRef.set(finalUsuario)
-            .addOnSuccessListener { onSuccess() }
-            .addOnFailureListener { e -> onError(e) }
-    }
-
-    fun verificarYRegistrarUsuario(
-        usuario: Usuario,
-        onSuccess: () -> Unit,
-        onConflict: (usuarioExiste: Boolean, correoExiste: Boolean, cumExiste: Boolean) -> Unit,
-        onError: (Exception) -> Unit
-    ) {
-        db.collection("usuarios")
-            .get()
-            .addOnSuccessListener { snapshot ->
-                val usuariosList = snapshot.toObjects(Usuario::class.java)
-
-                val otrosUsuarios = usuariosList.filter { it.uid != usuario.uid }
-
-                val usuarioDuplicado = otrosUsuarios.any {
-                    it.usuario.trim().equals(usuario.usuario.trim(), ignoreCase = true)
-                }
-                val correoDuplicado = otrosUsuarios.any {
-                    it.correo.trim().equals(usuario.correo.trim(), ignoreCase = true)
-                }
-                val cumDuplicado = otrosUsuarios.any {
-                    it.cum.trim().equals(usuario.cum.trim(), ignoreCase = true)
-                }
-
-                if (usuarioDuplicado || correoDuplicado || cumDuplicado) {
-                    onConflict(usuarioDuplicado, correoDuplicado, cumDuplicado)
-                } else {
-                    registrarUsuario(usuario, onSuccess, onError)
-                }
-            }
-            .addOnFailureListener { e -> onError(e) }
-    }
 
     fun obtenerUsuarioPorUid(uid: String): Flow<Usuario?> = callbackFlow {
         if (uid.isBlank()) {
@@ -65,32 +20,11 @@ object FirestoreManager {
         val listener = db.collection("usuarios").document(uid)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
-                    close(error)
-                    return@addSnapshotListener
-                }
-                if (snapshot != null && snapshot.exists()) {
-                    val user = snapshot.toObject(Usuario::class.java)
-                    trySend(user)
-                } else {
                     trySend(null)
-                }
-            }
-        awaitClose { listener.remove() }
-    }
-
-    fun obtenerTodosLosUsuarios(): Flow<List<Usuario>> = callbackFlow {
-        val listener = db.collection("usuarios")
-            .addSnapshotListener { snapshot, error ->
-                if (error != null) {
-                    close(error)
                     return@addSnapshotListener
                 }
-                if (snapshot != null) {
-                    val usuarios = snapshot.toObjects(Usuario::class.java)
-                    trySend(usuarios)
-                } else {
-                    trySend(emptyList())
-                }
+                val user = snapshot?.toObject(Usuario::class.java)
+                trySend(user)
             }
         awaitClose { listener.remove() }
     }
@@ -99,160 +33,172 @@ object FirestoreManager {
         identificador: String,
         cum: String,
         contrasena: String,
-        onSuccess: (Usuario?) -> Unit,
-        onError: (Exception) -> Unit
+        onResult: (Usuario?) -> Unit
+    ) {
+        db.collection("usuarios")
+            .whereEqualTo("cum", cum)
+            .get()
+            .addOnSuccessListener { querySnapshot: QuerySnapshot ->
+                val user = querySnapshot.documents
+                    .mapNotNull { it.toObject(Usuario::class.java) }
+                    .find { u: Usuario ->
+                        (u.correo.equals(identificador, ignoreCase = true) ||
+                         u.usuario.equals(identificador, ignoreCase = true)) &&
+                         u.contrasena == contrasena
+                    }
+                onResult(user)
+            }
+            .addOnFailureListener {
+                onResult(null)
+            }
+    }
+
+    fun verificarYRegistrarUsuario(
+        usuario: Usuario,
+        onSuccess: (Usuario) -> Unit,
+        onError: (String) -> Unit
     ) {
         db.collection("usuarios")
             .get()
-            .addOnSuccessListener { snapshot ->
-                val usuarios = snapshot.toObjects(Usuario::class.java)
-                val matched = usuarios.find { user ->
-                    (user.correo.equals(identificador, ignoreCase = true) || user.usuario.equals(identificador, ignoreCase = true)) &&
-                    user.cum.equals(cum, ignoreCase = true) &&
-                    user.contrasena == contrasena
+            .addOnSuccessListener { querySnapshot: QuerySnapshot ->
+                val existing = querySnapshot.documents
+                    .mapNotNull { it.toObject(Usuario::class.java) }
+                    .any {
+                        it.usuario.equals(usuario.usuario, ignoreCase = true) ||
+                        it.correo.equals(usuario.correo, ignoreCase = true)
+                    }
+
+                if (existing) {
+                    onError("El nombre de usuario o correo ya está registrado.")
+                } else {
+                    val docRef = db.collection("usuarios").document()
+                    val newUser = usuario.copy(uid = docRef.id)
+                    docRef.set(newUser)
+                        .addOnSuccessListener { onSuccess(newUser) }
+                        .addOnFailureListener { e: Exception -> onError(e.localizedMessage ?: "Error al registrar") }
                 }
-                onSuccess(matched)
             }
-            .addOnFailureListener { e -> onError(e) }
+            .addOnFailureListener { e: Exception ->
+                onError(e.localizedMessage ?: "Error al consultar la base de datos")
+            }
     }
 
-    // 2. PROYECTOS
-    fun crearProyecto(
-        proyecto: Proyecto,
-        responsableUid: String,
+    fun registrarUsuario(
+        usuario: Usuario,
         onSuccess: () -> Unit,
-        onError: (Exception) -> Unit
+        onError: (String) -> Unit
     ) {
-        val collectionRef = db.collection("proyectos")
-        val docRef = if (proyecto.id.isNotBlank()) collectionRef.document(proyecto.id) else collectionRef.document()
-        val responsablesList = if (proyecto.responsablesIds.contains(responsableUid)) {
-            proyecto.responsablesIds
+        if (usuario.uid.isBlank()) {
+            val docRef = db.collection("usuarios").document()
+            val newUser = usuario.copy(uid = docRef.id)
+            docRef.set(newUser)
+                .addOnSuccessListener { onSuccess() }
+                .addOnFailureListener { onError(it.localizedMessage ?: "Error") }
         } else {
-            proyecto.responsablesIds + responsableUid
+            db.collection("usuarios").document(usuario.uid)
+                .set(usuario)
+                .addOnSuccessListener { onSuccess() }
+                .addOnFailureListener { onError(it.localizedMessage ?: "Error") }
         }
-        val finalProyecto = proyecto.copy(id = docRef.id, responsablesIds = responsablesList)
-        docRef.set(finalProyecto)
-            .addOnSuccessListener { onSuccess() }
-            .addOnFailureListener { e -> onError(e) }
+    }
+
+    fun obtenerTodosLosUsuarios(): Flow<List<Usuario>> = callbackFlow {
+        val listener = db.collection("usuarios")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    trySend(emptyList())
+                    return@addSnapshotListener
+                }
+                val list = snapshot?.documents?.mapNotNull { it.toObject(Usuario::class.java) } ?: emptyList()
+                trySend(list)
+            }
+        awaitClose { listener.remove() }
     }
 
     fun obtenerTodosLosProyectos(): Flow<List<Proyecto>> = callbackFlow {
         val listener = db.collection("proyectos")
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
-                    close(error)
+                    trySend(emptyList())
                     return@addSnapshotListener
                 }
-                if (snapshot != null) {
-                    val proyectos = snapshot.toObjects(Proyecto::class.java)
-                    trySend(proyectos)
-                } else {
-                    trySend(emptyList())
-                }
+                val list = snapshot?.documents?.mapNotNull { it.toObject(Proyecto::class.java) } ?: emptyList()
+                trySend(list)
             }
         awaitClose { listener.remove() }
     }
 
-    fun obtenerProyectosPorResponsable(usuarioUid: String): Flow<List<Proyecto>> = callbackFlow {
-        if (usuarioUid.isBlank()) {
-            trySend(emptyList())
-            close()
-            return@callbackFlow
-        }
+    fun obtenerProyectosPorResponsable(uid: String): Flow<List<Proyecto>> = callbackFlow {
         val listener = db.collection("proyectos")
-            .whereArrayContains("responsablesIds", usuarioUid)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
-                    close(error)
+                    trySend(emptyList())
                     return@addSnapshotListener
                 }
-                if (snapshot != null) {
-                    val proyectos = snapshot.toObjects(Proyecto::class.java)
-                    trySend(proyectos)
-                } else {
-                    trySend(emptyList())
-                }
+                val list = snapshot?.documents
+                    ?.mapNotNull { it.toObject(Proyecto::class.java) }
+                    ?.filter { it.responsablesIds.contains(uid) } ?: emptyList()
+                trySend(list)
             }
         awaitClose { listener.remove() }
     }
 
-    fun obtenerProyectosPorVoluntario(usuarioUid: String): Flow<List<Proyecto>> = callbackFlow {
-        if (usuarioUid.isBlank()) {
-            trySend(emptyList())
-            close()
-            return@callbackFlow
-        }
+    fun obtenerProyectosPorVoluntario(uid: String): Flow<List<Proyecto>> = callbackFlow {
         val listener = db.collection("proyectos")
-            .whereArrayContains("voluntariosIds", usuarioUid)
+            .whereArrayContains("voluntariosIds", uid)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
-                    close(error)
+                    trySend(emptyList())
                     return@addSnapshotListener
                 }
-                if (snapshot != null) {
-                    val proyectos = snapshot.toObjects(Proyecto::class.java)
-                    trySend(proyectos)
-                } else {
-                    trySend(emptyList())
-                }
+                val list = snapshot?.documents?.mapNotNull { it.toObject(Proyecto::class.java) } ?: emptyList()
+                trySend(list)
             }
         awaitClose { listener.remove() }
     }
 
-    fun agregarVoluntarioAProyecto(
-        proyectoId: String,
-        usuarioUid: String,
-        onSuccess: () -> Unit = {},
-        onError: (Exception) -> Unit = {}
+    fun crearProyecto(
+        proyecto: Proyecto,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
     ) {
-        val docRef = db.collection("proyectos").document(proyectoId)
-        docRef.get().addOnSuccessListener { snapshot ->
-            if (snapshot.exists()) {
-                val proj = snapshot.toObject(Proyecto::class.java)
-                if (proj != null) {
-                    val updateTask = if (proj.voluntariosIds.contains(usuarioUid)) {
-                        docRef.update("voluntariosIds", FieldValue.arrayRemove(usuarioUid))
-                    } else {
-                        docRef.update("voluntariosIds", FieldValue.arrayUnion(usuarioUid))
-                    }
-                    updateTask.addOnSuccessListener { onSuccess() }.addOnFailureListener { onError(it) }
-                }
-            }
-        }.addOnFailureListener { onError(it) }
-    }
-
-    fun agregarResponsableAProyecto(
-        proyectoId: String,
-        usuarioUid: String,
-        onSuccess: () -> Unit = {},
-        onError: (Exception) -> Unit = {}
-    ) {
-        db.collection("proyectos").document(proyectoId)
-            .update("responsablesIds", FieldValue.arrayUnion(usuarioUid))
+        val docRef = db.collection("proyectos").document()
+        val newProj = proyecto.copy(id = docRef.id)
+        docRef.set(newProj)
             .addOnSuccessListener { onSuccess() }
-            .addOnFailureListener { onError(it) }
+            .addOnFailureListener { onError(it.localizedMessage ?: "Error al crear proyecto") }
     }
 
     fun editarProyecto(
-        proyectoId: String,
-        camposActualizados: Map<String, Any>,
-        onSuccess: () -> Unit = {},
-        onError: (Exception) -> Unit = {}
+        id: String,
+        mapUpdates: Map<String, Any>,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
     ) {
-        db.collection("proyectos").document(proyectoId)
-            .update(camposActualizados)
+        db.collection("proyectos").document(id)
+            .update(mapUpdates)
             .addOnSuccessListener { onSuccess() }
-            .addOnFailureListener { onError(it) }
+            .addOnFailureListener { onError(it.localizedMessage ?: "Error al actualizar") }
     }
 
     fun eliminarProyecto(
-        proyectoId: String,
-        onSuccess: () -> Unit = {},
-        onError: (Exception) -> Unit = {}
+        id: String,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
     ) {
-        db.collection("proyectos").document(proyectoId)
+        db.collection("proyectos").document(id)
             .delete()
             .addOnSuccessListener { onSuccess() }
-            .addOnFailureListener { onError(it) }
+            .addOnFailureListener { onError(it.localizedMessage ?: "Error al eliminar") }
+    }
+
+    fun agregarVoluntarioAProyecto(idProyecto: String, uidUsuario: String) {
+        db.collection("proyectos").document(idProyecto)
+            .update("voluntariosIds", FieldValue.arrayUnion(uidUsuario))
+    }
+
+    fun quitarVoluntarioDeProyecto(idProyecto: String, uidUsuario: String) {
+        db.collection("proyectos").document(idProyecto)
+            .update("voluntariosIds", FieldValue.arrayRemove(uidUsuario))
     }
 }
