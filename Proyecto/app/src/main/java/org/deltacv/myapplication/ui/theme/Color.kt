@@ -19,10 +19,10 @@ val DarkPrimary = Color(0xFF16242B)
 val DarkOnPrimary = Color(0xFFFFFFFF)
 val DarkBackground = Color(0xFF0F151B)
 val DarkOnBackground = Color(0xFFF0F4F8)
-val DarkSurface = Color(0xFF1C242C)
+val DarkSurface = Color(0xFF124556)
 val DarkOnSurface = Color(0xFFF0F4F8)
 val DarkSecondary = Color(0xFF231F33)
-val DarkOnSecondary = Color(0xFFFFFFFF)
+val DarkOnSecondary = Color(0xFF144054)
 val DarkSecondaryContainer = Color(0xFF3F3859)
 val DarkOnSecondaryContainer = Color(0xFFFFFFFF)
 
@@ -45,7 +45,7 @@ val LightCardTeal = CardColorScheme(
     avatarIcon = Color(0xFF0F3B47),
     badgeBg = Color(0xFFA2CFC7),
     badgeText = Color(0xFF0F3B47),
-    textColor = Color(0xFF0F3B47),
+    textColor = Color(0xFF009688),
     iconTint = Color(0xFF2B6D7A),
     decorationColor = Color(0xFF528A81)
 )
