@@ -56,20 +56,28 @@ object FirestoreManager {
     fun verificarYRegistrarUsuario(
         usuario: Usuario,
         onSuccess: (Usuario) -> Unit,
+        onConflict: (usuarioExiste: Boolean, correoExiste: Boolean, cumExiste: Boolean) -> Unit,
         onError: (String) -> Unit
     ) {
         db.collection("usuarios")
             .get()
             .addOnSuccessListener { querySnapshot: QuerySnapshot ->
-                val existing = querySnapshot.documents
+                val usuariosList = querySnapshot.documents
                     .mapNotNull { it.toObject(Usuario::class.java) }
-                    .any {
-                        it.usuario.equals(usuario.usuario, ignoreCase = true) ||
-                        it.correo.equals(usuario.correo, ignoreCase = true)
-                    }
+                    .filter { it.uid != usuario.uid }
 
-                if (existing) {
-                    onError("El nombre de usuario o correo ya está registrado.")
+                val usuarioDuplicado = usuariosList.any {
+                    it.usuario.trim().equals(usuario.usuario.trim(), ignoreCase = true)
+                }
+                val correoDuplicado = usuariosList.any {
+                    it.correo.trim().equals(usuario.correo.trim(), ignoreCase = true)
+                }
+                val cumDuplicado = usuariosList.any {
+                    it.cum.trim().equals(usuario.cum.trim(), ignoreCase = true)
+                }
+
+                if (usuarioDuplicado || correoDuplicado || cumDuplicado) {
+                    onConflict(usuarioDuplicado, correoDuplicado, cumDuplicado)
                 } else {
                     val docRef = db.collection("usuarios").document()
                     val newUser = usuario.copy(uid = docRef.id)
